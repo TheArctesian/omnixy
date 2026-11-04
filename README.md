@@ -10,6 +10,11 @@ desktop: the Quickshell bar, menus, panels and lock screen, Hyprland's Lua confi
 every bundled theme, and the `omarchy` CLI. Your system, though, is declared in a
 flake and can be rolled back.
 
+<p align="center">
+  <img src="docs/screenshots/01-desktop.jpg" width="49%" alt="Desktop">
+  <img src="docs/screenshots/03-menu.jpg" width="49%" alt="Omarchy menu">
+</p>
+
 ## How it works
 
 - **`pkgs.omarchy`** is upstream's repository, installed at
