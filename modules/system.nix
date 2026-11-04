@@ -74,7 +74,7 @@ in
       fi
     '';
 
-    documentation.man.generateCaches = lib.mkDefault false;
+    documentation.man.cache.enable = lib.mkDefault false;
     nix.settings.experimental-features = [
       "nix-command"
       "flakes"

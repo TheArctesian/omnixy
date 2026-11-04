@@ -91,11 +91,11 @@
         description = "A NixOS flake that imports OmniXY";
       };
 
-      formatter.${system} = pkgs.nixfmt-rfc-style;
+      formatter.${system} = pkgs.nixfmt;
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
-          nixfmt-rfc-style
+          nixfmt
           nil
           statix
           deadnix
