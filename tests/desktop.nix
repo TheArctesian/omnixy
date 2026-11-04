@@ -61,7 +61,13 @@ pkgs.testers.runNixOSTest {
 
     with subtest("session starts"):
         machine.wait_for_unit("display-manager.service")
-        machine.wait_until_succeeds("ls /run/user/1000/hypr/*/.socket.sock", timeout=600)
+        try:
+            machine.wait_until_succeeds("ls /run/user/1000/hypr/*/.socket.sock", timeout=420)
+        except Exception:
+            print(machine.execute("id alice; ps -eo user,pid,comm,args --sort=pid | grep -v '\\[' | tail -80")[1])
+            print(machine.execute("ls -la /run/user/*/ /run/user/*/hypr 2>&1 | head -60")[1])
+            print(machine.execute("su - alice -c 'XDG_RUNTIME_DIR=/run/user/$(id -u alice) systemctl --user status --no-pager wayland-wm@hyprland.desktop.service 2>&1 | tail -40'")[1])
+            raise
         machine.wait_until_succeeds("test -S /run/user/1000/wayland-1", timeout=120)
 
     with subtest("user files were seeded"):
@@ -73,7 +79,11 @@ pkgs.testers.runNixOSTest {
 
     with subtest("quickshell desktop is running"):
         machine.wait_until_succeeds("pgrep -u alice quickshell", timeout=120)
-        machine.sleep(15)
+        # The shell logs its paths once QML is up; plugins (bar, menu,
+        # background) register after that. Software rendering is slow, so
+        # give them a generous margin before screenshotting.
+        machine.wait_until_succeeds("journalctl -b -t omarchy-shell | grep -q 'omarchy-shell paths'", timeout=300)
+        machine.sleep(60)
         machine.screenshot("01-desktop")
         print(user("hyprctl -j monitors"))
 
@@ -85,7 +95,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("omarchy menu"):
         machine.send_key("meta_l-spc")
-        machine.sleep(5)
+        machine.sleep(15)
         machine.screenshot("03-menu")
         machine.send_key("esc")
 
@@ -97,12 +107,13 @@ pkgs.testers.runNixOSTest {
 
     with subtest("omarchy cli"):
         print(user("omarchy-version"))
-        print(user("omarchy help 2>&1 | head -40"))
+        print(user("omarchy commands 2>&1 | head -40"))
 
     with subtest("collect logs"):
         print(machine.execute("ps -eo user,pid,args | grep -iE 'polkit|agent|nm-applet' | grep -v grep")[1])
         print(machine.execute("journalctl -b --no-pager -t omarchy-shell | grep -E 'WARN|ERROR' | tail -80")[1])
         print(machine.execute("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user --failed --no-pager'")[1])
         print(machine.execute("su - alice -c 'cat ~/.local/state/omarchy/first-run.log' 2>&1 | tail -60")[1])
+        print(user("gsettings get org.gnome.desktop.interface color-scheme", check=False)[1])
   '';
 }
