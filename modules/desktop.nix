@@ -75,6 +75,11 @@ in
       OMNIXY_DEFAULT_THEME = cfg.theme;
       TERMINAL = "xdg-terminal-exec";
       NIXOS_OZONE_WL = "1";
+      # Let plain `gsettings` (first-run, omarchy-theme-set) find the
+      # org.gnome.desktop.interface schema outside wrapped GTK apps.
+      XDG_DATA_DIRS = [
+        "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}"
+      ];
     }
     // lib.optionalAttrs (cfg.flake.host != null) { OMNIXY_HOST = cfg.flake.host; };
   };

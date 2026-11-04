@@ -127,6 +127,8 @@ let
     xdg-user-dirs
     dbus
     libxkbcommon
+    glib # gsettings, used by first-run and theme scripts
+    gsettings-desktop-schemas
     xdg-utils
     desktop-file-utils
     util-linux
