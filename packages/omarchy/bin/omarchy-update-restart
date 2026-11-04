@@ -17,10 +17,18 @@ elif [[ -f $HOME/.local/state/omarchy/reboot-required ]]; then
   confirm_reboot "Updates require reboot. Ready?"
 fi
 
-running_hyprland=$(readlink /proc/$(pgrep -x Hyprland | head -1)/exe 2>/dev/null)
-if [[ -n $running_hyprland && ! -e ${running_hyprland% (deleted)} ]] ||
-  [[ -n $running_hyprland && $running_hyprland != "$(readlink -f /run/current-system/sw/bin/Hyprland)" ]]; then
-  confirm_reboot "Hyprland has been updated. Reboot?"
+# Compare the store path of the running compositor with the one in the
+# current system. The process may be a wrapper's child, so compare the
+# /nix/store/<hash>-<name> prefix only.
+store_root() { [[ $1 =~ ^(/nix/store/[^/]+) ]] && echo "${BASH_REMATCH[1]}"; }
+hypr_pid=$(hyprctl -j instances 2>/dev/null | jq -r '.[0].pid // empty')
+if [[ -n $hypr_pid ]]; then
+  running_hyprland=$(readlink "/proc/$hypr_pid/exe" 2>/dev/null)
+  running_root=$(store_root "${running_hyprland% (deleted)}")
+  current_root=$(store_root "$(readlink -f /run/current-system/sw/bin/Hyprland)")
+  if [[ -n $running_root && -n $current_root && $running_root != "$current_root" ]]; then
+    confirm_reboot "Hyprland has been updated. Reboot?"
+  fi
 fi
 
 for file in "$HOME"/.local/state/omarchy/restart-*-required; do
