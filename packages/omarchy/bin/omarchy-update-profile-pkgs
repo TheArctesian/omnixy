@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# omarchy:summary=Upgrade packages installed into your nix profile
+# omarchy:hidden=true
+
+if nix profile list --json 2>/dev/null | jq -e '.elements | length > 0' >/dev/null; then
+  echo -e "\e[32m\nUpdate nix profile packages\e[0m"
+  NIXPKGS_ALLOW_UNFREE=1 nix profile upgrade --impure --all || true
+fi

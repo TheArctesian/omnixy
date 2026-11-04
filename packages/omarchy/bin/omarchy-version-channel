@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Print the nixpkgs revision the system was built from
+
+echo "nixos $(nixos-version 2>/dev/null || echo unknown)"

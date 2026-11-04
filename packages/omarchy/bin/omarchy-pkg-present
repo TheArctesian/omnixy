@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# omarchy:summary=Exit 0 if all named packages are installed
+# omarchy:args=<packages...>
+
+exec omnixy-pkg present "$@"

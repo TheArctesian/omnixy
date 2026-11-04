@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# omarchy:summary=Update OmniXY: flake inputs, NixOS system, nix profile, and user tools
+# omarchy:args=[-y]
+# omarchy:requires-sudo=true
+#
+# The NixOS version of Omarchy's update: pacman -Syu becomes "bump the flake
+# lock and nixos-rebuild switch". Set OMNIXY_FLAKE (default /etc/nixos) and
+# optionally OMNIXY_HOST (default: hostname) via the omnixy.flake NixOS options.
+
+set -e
+
+if [[ -z ${OMARCHY_UPDATE_LOGGED:-} ]]; then
+  script_command=$(printf '%q ' "$0" "$@")
+  exec env OMARCHY_UPDATE_LOGGED=1 script -qefc "$script_command" "/tmp/omarchy-update.log"
+fi
+
+trap 'echo ""; echo -e "\033[0;31mSomething went wrong during the update!\n\nReview the output above. Your previous NixOS generation is still in the boot menu if you need to roll back.\033[0m"' ERR
+trap 'omarchy-update-stay-awake stop' EXIT
+
+[[ ${1:-} != "-y" ]] || export OMARCHY_UPDATE_UNATTENDED=1
+
+if [[ ${1:-} == "-y" ]] || omarchy-update-confirm; then
+  omarchy-update-stay-awake start
+  omarchy-update-system-pkgs
+  omarchy-update-profile-pkgs
+  omarchy-migrate
+  omarchy-hook post-update
+  omarchy-update-mise
+  omarchy-update-status || true
+
+  omarchy-update-stay-awake stop
+  trap - EXIT
+
+  omarchy-update-restart
+fi

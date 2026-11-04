@@ -1,0 +1,176 @@
+#!/bin/bash
+
+# omarchy:summary=Nix backend for Omarchy's package helpers (add, drop, present, missing)
+# omarchy:args=<add|drop|present|missing|resolve> <packages...>
+# omarchy:hidden=true
+#
+# Omarchy's install scripts speak Arch package names. On OmniXY they are mapped
+# to nixpkgs attributes and installed imperatively into the user's nix profile,
+# which needs no rebuild and survives reboots. Packages that need a system
+# service (Docker, Tailscale, Steam, fingerprint...) can't be installed that
+# way; for those the declarative NixOS option is printed instead.
+#
+# To make a profile install permanent and reproducible, move it into your
+# system flake (see `omarchy-pkg-declarative`).
+
+set -uo pipefail
+
+# Arch name -> nixpkgs attribute. "!" means "needs a NixOS option", "-" means
+# "satisfied by OmniXY itself", "?" means "not packaged for NixOS".
+declare -A MAP=(
+  [1password]='!programs._1password-gui.enable = true;'
+  [1password-cli]='!programs._1password.enable = true;'
+  [bitwarden]=bitwarden-desktop
+  [brave-bin]=brave
+  [brave-origin-bin]=brave
+  [cursor-bin]=code-cursor
+  [composer]=php.packages.composer
+  [dropbox]=dropbox
+  [dropbox-cli]=dropbox-cli
+  [nautilus-dropbox]=dropbox
+  [flatpak]='!services.flatpak.enable = true;'
+  [fprintd]='!services.fprintd.enable = true;'
+  [libfprint]='!services.fprintd.enable = true;'
+  [libfprint-git]='!services.fprintd.enable = true;'
+  [fwupd]='!services.fwupd.enable = true;'
+  [libfido2]=libfido2
+  [pam-u2f]='!security.pam.u2f.enable = true;'
+  [google-chrome]=google-chrome
+  [heroic-games-launcher-bin]=heroic
+  [lmstudio-bin]=lmstudio
+  [lutris]=lutris
+  [microsoft-edge-stable-bin]=microsoft-edge
+  [minecraft-launcher]=prismlauncher
+  [nordvpn-bin]='?'
+  [openbsd-netcat]=netcat-openbsd
+  [openssh]='!services.openssh.enable = true;'
+  [php-sqlite]=php
+  [python-gpgme]=python3Packages.gpgme
+  [python-protobuf]=python3Packages.protobuf
+  [retroarch]=retroarch-full
+  [signal-desktop]=signal-desktop
+  [spotify]=spotify
+  [steam]='!programs.steam.enable = true;'
+  [sublime-text-4]=sublime4
+  [sunshine]='!services.sunshine.enable = true;'
+  [supergfxctl]='!services.supergfxd.enable = true;'
+  [tailscale]='!services.tailscale.enable = true;'
+  [umu-launcher]=umu-launcher
+  [visual-studio-code-bin]=vscode
+  [voxtype-bin]=voxtype
+  [wine-staging]=wineWowPackages.staging
+  [wine-gecko]=-
+  [wine-mono]=-
+  [xpadneo-dkms]='!hardware.xpadneo.enable = true;'
+  [ydotool]='!programs.ydotool.enable = true;'
+  [zen-browser-bin]='?'
+  [docker]='!omnixy.features.docker = true;'
+  [docker-compose]='!omnixy.features.docker = true;'
+  [docker-buildx]='!omnixy.features.docker = true;'
+  [omarchy-keyring]=-
+  [pacman]=-
+  [libyaml]=libyaml
+  [libappindicator-gtk3]=libappindicator-gtk3
+  [usbutils]=usbutils
+  [gum]=gum
+  [wtype]=wtype
+)
+
+resolve() {
+  local name=$1
+  if [[ -n ${MAP[$name]+x} ]]; then
+    echo "${MAP[$name]}"
+    return
+  fi
+  # Omarchy's own desktop apps (omacalc, omazed, once, t3code, ...) and other
+  # AUR-only builds have no nixpkgs equivalent.
+  case $name in
+    omarchy-* | oma* | once-bin | t3code-bin | openai-codex-desktop | perplexity | grok-bot | hermes-desktop | openclaw)
+      echo '?'
+      return
+      ;;
+  esac
+  name=${name%-bin}
+  name=${name%-git}
+  echo "$name"
+}
+
+nix_installed() {
+  # Anything in the system profile or the user's nix profile counts.
+  local attr=$1 pname=${1##*.}
+  nix profile list --json 2>/dev/null | jq -e --arg a "$attr" \
+    '.elements | to_entries | any(.value.attrPath? // "" | endswith("." + $a))' >/dev/null 2>&1 && return 0
+  nix-store -q --references /run/current-system/sw 2>/dev/null | grep -qE -- "^/nix/store/[a-z0-9]{32}-${pname}-[0-9]" && return 0
+  return 1
+}
+
+is_present() {
+  local target
+  target=$(resolve "$1")
+  case $target in
+    -) return 0 ;;
+    '?') return 1 ;;
+    '!'*) command -v "$1" >/dev/null 2>&1 && return 0; return 1 ;;
+  esac
+  nix_installed "$target" && return 0
+  command -v "$1" >/dev/null 2>&1
+}
+
+cmd=${1:-}
+shift || true
+
+case $cmd in
+  resolve)
+    for p in "$@"; do printf '%s\t%s\n' "$p" "$(resolve "$p")"; done
+    ;;
+  present)
+    for p in "$@"; do is_present "$p" || exit 1; done
+    ;;
+  missing)
+    for p in "$@"; do is_present "$p" || exit 0; done
+    exit 1
+    ;;
+  add)
+    attrs=()
+    options=()
+    unsupported=()
+    for p in "$@"; do
+      is_present "$p" && continue
+      target=$(resolve "$p")
+      case $target in
+        -) ;;
+        '?') unsupported+=("$p") ;;
+        '!'*) options+=("${target#!}") ;;
+        *) attrs+=("nixpkgs#$target") ;;
+      esac
+    done
+
+    status=0
+    if (( ${#unsupported[@]} > 0 )); then
+      echo -e "\e[31mNot packaged for NixOS: ${unsupported[*]}\e[0m" >&2
+      status=1
+    fi
+    if (( ${#options[@]} > 0 )); then
+      echo -e "\e[33mThese need a NixOS option. Add to your system configuration and run omarchy-update:\e[0m" >&2
+      printf '  %s\n' "${options[@]}" | sort -u >&2
+      status=1
+    fi
+    if (( ${#attrs[@]} > 0 )); then
+      echo "Installing into your nix profile: ${attrs[*]#nixpkgs#}"
+      NIXPKGS_ALLOW_UNFREE=1 nix profile add --impure "${attrs[@]}" || status=1
+    fi
+    exit $status
+    ;;
+  drop)
+    for p in "$@"; do
+      target=$(resolve "$p")
+      [[ $target == [-?!]* ]] && continue
+      nix profile remove "legacyPackages.x86_64-linux.$target" >/dev/null 2>&1 ||
+        nix profile remove "$target" >/dev/null 2>&1 || true
+    done
+    ;;
+  *)
+    echo "Usage: omnixy-pkg <add|drop|present|missing|resolve> <packages...>" >&2
+    exit 2
+    ;;
+esac

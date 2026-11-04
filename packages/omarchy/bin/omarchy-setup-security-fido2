@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Set up fido2 authentication (declarative on OmniXY)
+
+cat <<'MSG'
+On OmniXY, fido2 authentication is enabled in your NixOS configuration:
+
+  security.pam.u2f = { enable = true; settings.cue = true; };
+
+Then run omarchy-update (or nixos-rebuild switch) and enroll with:
+
+  mkdir -p ~/.config/Yubico && pamu2fcfg > ~/.config/Yubico/u2f_keys
+MSG

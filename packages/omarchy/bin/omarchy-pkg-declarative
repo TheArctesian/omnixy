@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# omarchy:summary=Print the packages in your nix profile as a NixOS snippet, to make them permanent
+
+nix profile list --json 2>/dev/null | jq -r '
+  "environment.systemPackages = with pkgs; [",
+  (.elements[] | .attrPath // empty | sub("^legacyPackages\\.[^.]+\\."; "  ")),
+  "];"'

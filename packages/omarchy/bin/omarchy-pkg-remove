@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# omarchy:summary=Show a fuzzy-finder TUI for picking nix profile packages to remove
+
+pkg_names=$(nix profile list --json 2>/dev/null | jq -r '.elements | keys[]' |
+  fzf --multi --preview 'nix profile list --json | jq -r --arg k {} ".elements[\$k]"' \
+    --preview-window 'down:65%:wrap' --color 'pointer:red,marker:red')
+
+if [[ -n $pkg_names ]]; then
+  echo "$pkg_names" | xargs nix profile remove
+  omarchy-show-done
+fi

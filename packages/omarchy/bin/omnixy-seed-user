@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# omarchy:summary=Seed missing Omarchy user files into $HOME (the NixOS stand-in for /etc/skel)
+# omarchy:args=[--force]
+# omarchy:hidden=true
+#
+# Arch seeds new users from /etc/skel at useradd time. NixOS has no skel, so
+# this runs at the start of every OmniXY session and copies only files that
+# don't exist yet: user edits are never overwritten, and files new upstream
+# releases add show up on the next login. --force resets everything to the
+# shipped defaults (what omarchy-reinstall-configs does).
+
+set -euo pipefail
+
+skel=/run/current-system/sw/share/omnixy/skel
+[[ -d $skel ]] || exit 0
+
+if [[ ${1:-} == "--force" ]]; then
+  cp -rf --no-preserve=mode,ownership "$skel/." "$HOME/"
+else
+  cp -rn --no-preserve=mode,ownership "$skel/." "$HOME/"
+fi
+
+# First session: apply the configured default theme before Hyprland starts so
+# the very first frame is themed (upstream does this in the ISO chroot).
+if [[ ! -s $HOME/.local/state/omarchy/current/theme.name ]]; then
+  OMARCHY_THEME_HEADLESS=1 omarchy-theme-set "${OMNIXY_DEFAULT_THEME:-Tokyo Night}" >/dev/null 2>&1 || true
+fi

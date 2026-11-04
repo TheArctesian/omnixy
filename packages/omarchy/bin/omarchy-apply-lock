@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# omarchy:summary=Lock screen PAM is managed by NixOS on OmniXY (no-op)
+# omarchy:hidden=true
+
+# /etc/pam.d/omarchy-lock-password and omarchy-lock-fingerprint are declared
+# by the OmniXY NixOS module (security.pam.services). Fingerprint unlock turns
+# on with services.fprintd.enable = true.
+exit 0

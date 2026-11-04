@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# omarchy:summary=Exit 0 if any named package is missing
+# omarchy:args=<packages...>
+
+exec omnixy-pkg missing "$@"
