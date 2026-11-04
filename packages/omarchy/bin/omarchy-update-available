@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# omarchy:summary=Check whether OmniXY updates are available (flake inputs behind upstream)
+
+set -uo pipefail
+
+flake=${OMNIXY_FLAKE:-/etc/nixos}
+lock=$flake/flake.lock
+[[ -f $lock ]] || { echo "OmniXY is up to date"; exit 1; }
+
+updates=()
+# Compare each locked github input against the current head of its branch.
+while IFS=$'\t' read -r name owner repo ref rev; do
+  [[ -n $rev ]] || continue
+  head=$(GIT_TERMINAL_PROMPT=0 timeout 10 git ls-remote "https://github.com/$owner/$repo" "${ref:-HEAD}" 2>/dev/null | head -1 | cut -f1)
+  [[ -n $head && $head != "$rev" ]] && updates+=("$name ($owner/$repo${ref:+ $ref}) has new commits")
+done < <(jq -r '.nodes as $n | $n.root.inputs | to_entries[] | .value as $k | ($k | if type == "array" then empty else . end) as $key | $n[$key] | select(.locked.type == "github" and (.original.rev == null)) | [$key, .locked.owner, .locked.repo, (.original.ref // ""), .locked.rev] | @tsv' "$lock")
+
+if (( ${#updates[@]} > 0 )); then
+  printf '%s\n' "${updates[@]}"
+  exit 0
+fi
+
+echo "OmniXY is up to date"
+exit 1

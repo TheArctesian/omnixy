@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# omarchy:summary=Show a fuzzy-finder TUI for picking nixpkgs packages to install into your nix profile
+
+query=$(gum input --placeholder "Search nixpkgs (e.g. obsidian)" --prompt "> ") || exit 0
+[[ -n $query ]] || exit 0
+
+echo "Searching nixpkgs for '$query'..."
+results=$(nix search nixpkgs "$query" --json 2>/dev/null |
+  jq -r 'to_entries[] | "\(.key | sub("^legacyPackages\\.[^.]+\\."; ""))\t\(.value.version)\t\(.value.description)"')
+
+[[ -n $results ]] || { echo "No packages found"; sleep 2; exit 1; }
+
+pkg_names=$(echo "$results" | fzf --multi --delimiter '\t' --with-nth 1,2 \
+  --preview 'echo {3}' --preview-window 'down:3:wrap' \
+  --color 'pointer:green,marker:green' | cut -f1)
+
+if [[ -n $pkg_names ]]; then
+  # shellcheck disable=SC2046
+  NIXPKGS_ALLOW_UNFREE=1 nix profile add --impure $(printf 'nixpkgs#%s ' $pkg_names)
+  omarchy-show-done
+fi

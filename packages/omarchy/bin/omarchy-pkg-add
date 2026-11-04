@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# omarchy:summary=Install the named packages (nix profile on OmniXY)
+# omarchy:args=<packages...>
+
+exec omnixy-pkg add "$@"

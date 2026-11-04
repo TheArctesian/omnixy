@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# omarchy:summary=Update the NixOS system: bump flake inputs and rebuild
+# omarchy:args=[--no-lock-update]
+# omarchy:requires-sudo=true
+
+set -e
+
+flake=${OMNIXY_FLAKE:-/etc/nixos}
+host=${OMNIXY_HOST:-$(hostname)}
+
+if [[ ! -f $flake/flake.nix ]]; then
+  echo -e "\e[31mNo flake.nix in $flake. Set omnixy.flake.path in your NixOS configuration.\e[0m" >&2
+  exit 1
+fi
+
+maybe_sudo() {
+  if [[ -w $flake/flake.lock || ( ! -e $flake/flake.lock && -w $flake ) ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+if [[ ${1:-} != "--no-lock-update" ]]; then
+  echo -e "\e[32m\nUpdate flake inputs ($flake)\e[0m"
+  maybe_sudo nix flake update --flake "$flake"
+fi
+
+echo -e "\e[32m\nRebuild NixOS ($flake#$host)\e[0m"
+sudo nixos-rebuild switch --flake "$flake#$host"

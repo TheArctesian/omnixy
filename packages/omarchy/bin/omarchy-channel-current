@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Print the active Omarchy package channel (always "nixos" on OmniXY)
+
+echo nixos

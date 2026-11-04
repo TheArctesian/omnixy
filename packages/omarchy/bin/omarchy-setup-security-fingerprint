@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Set up fingerprint authentication (declarative on OmniXY)
+
+cat <<'MSG'
+On OmniXY, fingerprint authentication is enabled in your NixOS configuration:
+
+  services.fprintd.enable = true;
+
+Then run omarchy-update (or nixos-rebuild switch) and enroll with:
+
+  fprintd-enroll
+MSG

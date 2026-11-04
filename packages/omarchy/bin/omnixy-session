@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Start the OmniXY Hyprland session (seed user files, then hand off to uwsm)
+# omarchy:hidden=true
+
+# Upstream's uwsm env.d file: OMARCHY_PATH, PATH, TERMINAL, EDITOR, user
+# overrides from ~/.config/uwsm/default, and mise shims.
+[[ -r /run/current-system/sw/share/omarchy/default/uwsm/env.d/10-omarchy ]] &&
+  . /run/current-system/sw/share/omarchy/default/uwsm/env.d/10-omarchy
+
+omnixy-seed-user || echo "omnixy-seed-user failed; continuing" >&2
+
+exec uwsm start -g -1 -e -D Hyprland hyprland.desktop

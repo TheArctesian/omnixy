@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Print when the NixOS system was last rebuilt
+
+date -d "@$(stat -c %Y "$(readlink /nix/var/nix/profiles/system)" 2>/dev/null || stat -c %Y /run/current-system)" "+%A, %B %d %Y at %H:%M"
