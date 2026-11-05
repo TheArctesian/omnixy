@@ -29,14 +29,12 @@ let
   archOnly = [
     "omarchy-upgrade-to-quattro"
     "omarchy-refresh-pacman"
-    "omarchy-refresh-limine"
     "omarchy-update-keyring"
     "omarchy-update-aur-pkgs"
     "omarchy-update-pacman-guard"
     "omarchy-update-pkg-prune"
     "omarchy-update-orphan-pkgs"
     "omarchy-update-system-pkgs-when-conflicted"
-    "omarchy-update-firmware"
     "omarchy-pkg-aur-add"
     "omarchy-pkg-aur-install"
     "omarchy-reinstall-pkgs"
@@ -111,16 +109,54 @@ stdenvNoCC.mkDerivation {
       -e 's|,/usr}/share/|,/usr,/run/current-system/sw}/share/|g' \
       -e 's|/etc/skel|/run/current-system/sw/share/omnixy/skel|g'
 
-    # A few scripts hardcode Arch's /usr/bin for tools that live elsewhere here.
-    grep -rlIZ -E '/usr/bin/(rm|mv|mktemp|install|timeout|hyprctl|signal-desktop|spotify|cursor|python3) ' $share/bin \
-      | xargs -0 -r sed -i -E 's#/usr/bin/(rm|mv|mktemp|install|timeout|hyprctl|signal-desktop|spotify|cursor|python3)\b#\1#g'
+    # Arch keeps every binary in /usr/bin; NixOS has none there (except env).
+    #  - `[[ -x /usr/bin/foo ]]` app checks become `command -v foo`, so apps
+    #    installed into the nix profile count too;
+    #  - helpers that re-run themselves under sudo use the profile path the
+    #    sudoers rules in modules/tuning.nix grant;
+    #  - every other /usr/bin/foo becomes a PATH lookup.
+    for f in $share/bin/*; do
+      grep -qE '/usr/bin/' "$f" || continue
+      sed -i -E \
+        -e 's#\[\[ -x /usr/bin/([A-Za-z0-9_.+-]+) \]\]#command -v \1 >/dev/null#g' \
+        -e 's#^PACKAGED_PATH=/usr/bin/#PACKAGED_PATH=/run/current-system/sw/bin/#' \
+        -e '2,$s#(^|[^A-Za-z0-9_./!-])/usr/bin/([A-Za-z0-9_.+-]+)#\1\2#g' \
+        "$f"
+    done
+    sed -i 's#/usr/bin/env#env#' $share/bin/omarchy-launch-docker-tui
+    # Browser hand-off matches the browser binary by path; match by name.
+    sed -i -E -e 's#^case \$\(type -P "\$1"\) in#case $(basename "$(type -P "$1")") in#' \
+      $share/bin/omarchy-cmd-browser-handoff
+
+    # /usr/share data that lives elsewhere on NixOS.
+    grep -rlIZ -E '/usr/share/(icons|pixmaps|sounds|plymouth|zoneinfo|vulkan|libretro)|/usr/lib/libretro' $share/bin | xargs -0 -r sed -i -E \
+      -e 's#/usr/share/vulkan/#/run/opengl-driver/share/vulkan/#g' \
+      -e 's#/usr/share/zoneinfo/#/etc/zoneinfo/#g' \
+      -e 's#/usr/lib/libretro#$HOME/.nix-profile/lib/retroarch/cores#g' \
+      -e 's#/usr/share/libretro#$HOME/.nix-profile/share/libretro#g' \
+      -e 's#/usr/share/(icons|pixmaps|sounds|plymouth)#/run/current-system/sw/share/\1#g'
+
+    # Files copied out of $OMARCHY_PATH (the read-only store) must stay
+    # writable, or the next theme switch or config refresh cannot replace
+    # them. Route the scripts' cp calls through omnixy-cp.
+    grep -rlZ -E '(^|[[:space:];&|({`])cp( |$)' $share/bin | xargs -0 -r sed -i -E \
+      -e '/^[[:space:]]*#/!s#(^|[[:space:];&|({`])cp( |$)#\1omnixy-cp\2#g'
+    sed -i 's#omnixy-cp#cp#g' $share/bin/omnixy-cp $share/bin/omnixy-seed-user
+    sed -i 's#tailscale file omnixy-cp#tailscale file cp#' $share/bin/omarchy-tailscale-send
+    sed -i 's#:-/usr/bin/hyprctl#:-hyprctl#' $share/bin/omarchy-hyprland-reload-guard
+
+    # AUR installs go through the same nixpkgs mapping as repo packages.
+    grep -rlZ 'omarchy-pkg-aur-add' $share/bin | xargs -0 -r sed -i 's#omarchy-pkg-aur-add#omarchy-pkg-add#g'
+    # Package removals go through the nix profile.
+    grep -rlZ 'sudo pacman -Rns --noconfirm' $share/bin | xargs -0 -r sed -i 's#sudo pacman -Rns --noconfirm#omarchy-pkg-drop#g'
 
     # --- Menu ----------------------------------------------------------------
     # Drop entries whose commands are Arch-only (children are found by key
     # prefix, so deleting the line removes the whole entry).
     menu=$share/default/omarchy/omarchy-menu.jsonc
     sed -i -E \
-      -e '/^  "(install\.aur|update\.channel[^"]*|update\.firmware|update\.config\.plymouth|trigger\.hardware\.hybrid-gpu|system\.hibernate)":/d' \
+      -e '/^  "(install\.aur|update\.channel[^"]*|setup\.reset|update\.config\.plymouth|trigger\.hardware\.hybrid-gpu|system\.hibernate)":/d' \
+      -e '/^  "style\.unlock":/d' \
       -e 's|("install\.package": \{[^}]*"label":)"Package"|\1"Package (nixpkgs)"|' \
       $menu
 
@@ -144,6 +180,15 @@ stdenvNoCC.mkDerivation {
 
     for f in $share/bin/*; do
       ln -s $f $out/bin/$(basename $f)
+    done
+
+    # Bundled web app / TUI icons. Arch installs them into hicolor under the
+    # name the desktop files use (lowercase, non-alphanumerics -> "-").
+    icons=$out/share/icons/hicolor/256x256/apps
+    mkdir -p $icons
+    for icon in $share/applications/icons/*.png; do
+      name=$(basename "$icon" .png | tr '[:upper:]' '[:lower:]' | sed -E 's/[^[:alnum:]]+/-/g; s/^-//; s/-$//')
+      cp "$icon" "$icons/$name.png"
     done
 
     # --- systemd user units, desktop session, data files ----------------------

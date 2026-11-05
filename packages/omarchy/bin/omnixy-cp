@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# omarchy:summary=cp that leaves copies writable (files from the Nix store are read-only)
+# omarchy:hidden=true
+#
+# Omarchy's scripts copy defaults out of $OMARCHY_PATH, which on NixOS is the
+# read-only Nix store. A plain (or -a/-p) cp keeps those read-only modes, so
+# the next run cannot overwrite or remove what it copied (theme switches,
+# config refreshes). Run cp unchanged, then add u+w to what it just created.
+
+stamp=$(mktemp)
+trap 'rm -f "$stamp"' EXIT
+
+cp "$@"
+status=$?
+
+dest=
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case ${args[i]} in
+    -t) dest=${args[i + 1]} ;;
+    --target-directory=*) dest=${args[i]#*=} ;;
+    -t?*) dest=${args[i]#-t} ;;
+  esac
+done
+[[ -z $dest ]] && dest=${args[-1]}
+
+if [[ -d $dest ]]; then
+  # Only entries whose inode changed during this cp, so pre-existing files
+  # the user made read-only on purpose keep their mode.
+  find "$dest" -cnewer "$stamp" ! -perm -u=w -exec chmod u+w {} + 2>/dev/null
+elif [[ -e $dest && ! -w $dest ]]; then
+  chmod u+w "$dest" 2>/dev/null
+fi
+
+exit $status
