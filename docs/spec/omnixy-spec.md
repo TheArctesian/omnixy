@@ -10,8 +10,8 @@
 
 | Status | First audit | Re-audit (after PRs #3 and #4) | After PR #5 |
 |---|---|---|---|
-| `WORKS` | 163 | 236 | 251 |
-| `PARTIAL` | 34 | 28 | 37 |
+| `WORKS` | 163 | 236 | 252 |
+| `PARTIAL` | 34 | 28 | 36 |
 | `STUB` | 22 | 22 | 22 |
 | `BROKEN` | 99 | 24 | 0 |
 | `NOT VERIFIED` | 59 | 69 | 69 |
@@ -23,7 +23,7 @@ The re-audit adds ONX-13-013 and ONX-13-014. PR #5 updates the 24 rows that were
 |---|---|---|---|---|---|
 | 1 | 2 | 1 | 0 | 0 | 0 |
 | 3 | 14 | 1 | 0 | 0 | 0 |
-| 4 | 17 | 2 | 0 | 0 | 10 |
+| 4 | 18 | 1 | 0 | 0 | 10 |
 | 5 | 17 | 0 | 0 | 0 | 1 |
 | 6 | 31 | 1 | 0 | 0 | 1 |
 | 7 | 14 | 1 | 0 | 0 | 0 |
@@ -125,7 +125,7 @@ Status values:
 | ONX-4-006 | The example host must set user `omnixy`, password "omnixy", host name `omnixy`, `Europe/London`, `en_GB`, keymap `uk`, xkb `gb`, systemd-boot and stateVersion 26.05. | WORKS | `hosts/example/default.nix`. |
 | ONX-4-007 | The VM host must set autoLogin, no preinstalls, no plymouth, 8 GB RAM, 4 cores and `virtio-vga-gl`. | WORKS | `hosts/vm`. |
 | ONX-4-008 | The ISO host must boot a graphical live session with autoLogin, `gparted` and `disko`. Its volume ID must be `OMNIXY`. | NOT VERIFIED | `hosts/iso`. No ISO build was run. |
-| ONX-4-009 | The ISO must give a guided installer. | PARTIAL | `omnixy-install` (gum TUI) asks the upstream questions, partitions with disko (ESP + btrfs, optional LUKS2), writes a flake in `/etc/nixos` and runs `nixos-install`. The ISO autostarts it. `checks.installer` tests the dry run. @INSTALL@ |
+| ONX-4-009 | The ISO must give a guided installer. | WORKS | `omnixy-install` (gum TUI) asks the upstream questions, partitions with disko (ESP + btrfs, optional LUKS2), writes a flake in `/etc/nixos` (with `omnixy.hardware` from `omnixy-hardware-detect`) and runs `nixos-install`. The ISO autostarts it. `checks.installer` tests the dry run. End-to-end in QEMU (OVMF, KVM, 40 GB disk): a plain install (scripted and through the TUI) boots to SDDM and logs in to the desktop; a LUKS install (through the TUI) boots to the Plymouth passphrase prompt and autologins, and `nixos-rebuild build --offline` on the installed flake reproduces the running system. Only UEFI and one disk were tested; the install needs network. |
 | ONX-4-010 | The display manager must start the session `omnixy`. | WORKS | `modules/desktop.nix` defaultSession `omnixy`; VM test logs in through SDDM autologin. |
 | ONX-4-011 | `omnixy-session` must source the uwsm env.d file, run `omnixy-seed-user` and then run `uwsm start -g -1 -e -D Hyprland hyprland.desktop`. | WORKS | `packages/omarchy/bin/omnixy-session`; VM test. |
 | ONX-4-012 | `omnixy-seed-user` must copy the skel tree into HOME without overwriting existing files. | WORKS | `cp -rn --no-preserve=mode,ownership`; VM test checks `hyprland.lua`, `.bashrc` and `theme.name`. |

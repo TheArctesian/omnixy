@@ -46,7 +46,7 @@ This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) w
 
 | Gap (spec IDs) | Fix |
 | --- | --- |
-| Guided installer (ONX-4-009) | `omnixy-install`: gum TUI, disko (ESP + btrfs, optional LUKS2), generated flake, `nixos-install`; autostarts on the ISO |
+| Guided installer (ONX-4-009) | `omnixy-install`: gum TUI, disko (ESP + btrfs, optional LUKS2), generated flake with detected `omnixy.hardware`, `nixos-install`; autostarts on the ISO. Plain and LUKS installs tested end-to-end in QEMU. Also fixed: SDDM login on a fresh install (no last user), live session locking mid-install |
 | `pam_faillock` (ONX-15-004) | `deny=10 unlock_time=120` rules around `pam_unix` in login, sudo, su, polkit-1, sshd and the lock screen; VM-tested |
 | tobi-try, asdcontrol (ONX-5-016) | Packaged and in the base set; upstream's asdcontrol sudoers grant |
 | NordVPN, ONCE (ONX-11-021/022) | `omnixy.features.nordvpn`, `omnixy.features.once` |
