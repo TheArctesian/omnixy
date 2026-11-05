@@ -534,19 +534,19 @@ EOF
 }
 
 write_configuration() {
-  local fs mounts="" encryption=""
+  local fs mounts="" encryption="" autologin=""
   for fs in / /home /nix /var/log; do
     mounts+="  fileSystems.\"$fs\".options = [ \"compress=zstd\" \"noatime\" ];"$'\n'
   done
   if ((encrypt)); then
-    encryption=$(
-      cat <<'EOF'
-
+    encryption='
   # Full-disk encryption: the LUKS device itself is in
   # hardware-configuration.nix; the passphrase prompt is the Plymouth splash.
   boot.initrd.luks.devices.cryptroot.allowDiscards = true;
-EOF
-    )
+'
+    autologin='    # The disk passphrase already authenticates you, as upstream.
+    autoLogin = true;
+'
   fi
   cat >"$1" <<EOF
 # Written by omnixy-install. This is yours to edit; apply changes with
@@ -565,8 +565,7 @@ EOF
     # From omnixy-hardware-detect; run \`omnixy-hardware-detect --nix\` again
     # after changing hardware.
     hardware = ${hardware_nix//$'\n'/$'\n'    };
-$( ((encrypt)) && printf '    # The disk passphrase already authenticates you, as upstream.\n    autoLogin = true;\n')
-    # preinstalls.enable = false; # skip LibreOffice, OBS, Kdenlive, ...
+${autologin}    # preinstalls.enable = false; # skip LibreOffice, OBS, Kdenlive, ...
     # features.docker = false;
   };
 
@@ -595,8 +594,7 @@ $( ((encrypt)) && printf '    # The disk passphrase already authenticates you, a
 
   # btrfs subvolumes from the installer (subvol= is in hardware-configuration.nix).
 $mounts  services.btrfs.autoScrub.enable = true;
-$encryption
-
+${encryption}
   system.stateVersion = "$STATE_VERSION"; # don't change after install
 }
 EOF
