@@ -18,6 +18,16 @@
 let
   cfg = config.omnixy;
 
+  # Expose single binaries without the rest of a package: pactl without the
+  # PulseAudio daemon (and its XDG autostart entry, PipeWire serves Pulse),
+  # and LocalSend under the name Omarchy's scripts call.
+  linkBin =
+    name: target:
+    pkgs.runCommand "omnixy-${name}" { } ''
+      mkdir -p $out/bin
+      ln -s ${target} $out/bin/${name}
+    '';
+
   core = with pkgs; [
     omarchy
     omnixy-fonts
@@ -60,7 +70,6 @@ let
     mpv
     kdePackages.qtimageformats
     kdePackages.qtwayland
-    fcitx5
     libsecret
     gnome-keyring
     seahorse
@@ -146,16 +155,26 @@ let
     tzupdate
     nss
     openssl
+    # Called directly by shipped scripts (audio controls, network panel,
+    # webcam capture, drive password, direct boot, launchers, icon caches).
+    (linkBin "pactl" "${pulseaudio}/bin/pactl")
+    iw
+    v4l-utils
+    cryptsetup
+    efibootmgr
+    gtk3 # gtk-launch, gtk-update-icon-cache
+    hicolor-icon-theme
   ];
 
   preinstalls = with pkgs; [
-    libreoffice-fresh
+    libreoffice
     obsidian
     obs-studio
     kdePackages.kdenlive
     pinta
     xournalpp
     localsend
+    (linkBin "localsend" "${localsend}/bin/localsend_app")
     moonlight-qt
     mpvScripts.mpris
   ];

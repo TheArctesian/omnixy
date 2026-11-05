@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Reset default configs (packages are declared by NixOS)
+
+set -e
+
+echo -e "This will reset default Omarchy configs.\nWarning: user config changes will be overwritten.\n"
+echo -e "System packages are declared in your NixOS configuration; 'omarchy-update' rebuilds them.\n"
+
+if gum confirm "Are you sure you want to reset configs and lose config changes?"; then
+  omarchy-reinstall-configs
+  gum confirm "Configs have been reset. Reboot?" && omarchy-system-reboot
+fi

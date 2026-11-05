@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# omarchy:summary=Boot splash theme (declarative on OmniXY)
+# omarchy:hidden=true
+
+cat <<'MSG'
+On OmniXY the boot splash is part of the NixOS configuration. Omarchy's theme
+is installed as `omarchy` when omnixy.features.plymouth is true:
+
+  boot.plymouth.theme = "omarchy";
+
+Set another installed theme there, then run omarchy-update.
+MSG

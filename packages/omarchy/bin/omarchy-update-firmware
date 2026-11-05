@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# omarchy:summary=Update firmware via fwupd (services.fwupd, enabled by OmniXY)
+# omarchy:requires-sudo=true
+
+set -e
+
+echo -e "\e[32mUpdate Firmware\e[0m"
+
+if omarchy-cmd-missing fwupdmgr; then
+  echo "fwupd is off. Set services.fwupd.enable = true; and run omarchy-update." >&2
+  exit 1
+fi
+
+# NixOS' fwupd module installs the UEFI capsule updater itself.
+fwupdmgr refresh --force
+sudo fwupdmgr update

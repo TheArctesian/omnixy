@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# omarchy:summary=Reset Omarchy user configs and shipped defaults in $HOME (destructive)
+
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Error: This script should not be run as root"
+  exit 1
+fi
+
+echo "Resetting Omarchy user configs to shipped defaults..."
+
+# The OmniXY skel tree plays /etc/skel's role. --force overwrites existing
+# files; the copies are made writable.
+omnixy-seed-user --force
+
+if omarchy-cmd-present omarchy-nvim-refresh; then
+  omarchy-nvim-refresh
+elif omarchy-cmd-present omarchy-nvim-setup; then
+  omarchy-nvim-setup --force
+fi

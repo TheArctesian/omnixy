@@ -52,7 +52,7 @@ declare -A MAP=(
   [spotify]=spotify
   [steam]='!programs.steam.enable = true;'
   [sublime-text-4]=sublime4
-  [sunshine]='!services.sunshine.enable = true;'
+  [sunshine]='!services.sunshine = { enable = true; openFirewall = true; capSysAdmin = true; };'
   [supergfxctl]='!services.supergfxd.enable = true;'
   [tailscale]='!services.tailscale.enable = true;'
   [umu-launcher]=umu-launcher
@@ -74,6 +74,40 @@ declare -A MAP=(
   [usbutils]=usbutils
   [gum]=gum
   [wtype]=wtype
+  [zed]=zed-editor
+  [kdenlive]=kdePackages.kdenlive
+  [xdebug]=php.extensions.xdebug
+  [ttf-cascadia-mono-nerd]=nerd-fonts.caskaydia-mono
+  [ttf-meslo-nerd]=nerd-fonts.meslo-lg
+  [ttf-firacode-nerd]=nerd-fonts.fira-code
+  [ttf-victor-mono-nerd]=nerd-fonts.victor-mono
+  [ttf-bitstream-vera-mono-nerd]=nerd-fonts.bitstream-vera-sans-mono
+  [ttf-iosevka-nerd]=nerd-fonts.iosevka
+  [libretro-shaders-slang]=libretro-shaders-slang
+)
+
+# How to tell whether a "!" (NixOS option) package is already enabled: the
+# command it provides, or a test expression. Arch package names rarely match
+# the binary name, so `command -v <archname>` alone is not enough.
+declare -A PROBE=(
+  [1password]=1password
+  [1password-cli]=op
+  [openssh]=sshd
+  [fprintd]=fprintd-list
+  [libfprint]=fprintd-list
+  [libfprint-git]=fprintd-list
+  [fwupd]=fwupdmgr
+  [pam-u2f]='@grep -qs pam_u2f /etc/pam.d/sudo'
+  [xpadneo-dkms]='@test -d /sys/module/hid_xpadneo'
+  [steam]=steam
+  [sunshine]=sunshine
+  [supergfxctl]=supergfxctl
+  [tailscale]=tailscale
+  [flatpak]=flatpak
+  [ydotool]=ydotool
+  [docker]=docker
+  [docker-compose]='@docker compose version'
+  [docker-buildx]='@docker buildx version'
 )
 
 resolve() {
@@ -85,6 +119,11 @@ resolve() {
   # Omarchy's own desktop apps (omacalc, omazed, once, t3code, ...) and other
   # AUR-only builds have no nixpkgs equivalent.
   case $name in
+    # RetroArch's cores and assets are part of nixpkgs' retroarch-full.
+    libretro-* | retroarch-assets-* | retroarch-joypad-autoconfig*)
+      echo '-'
+      return
+      ;;
     omarchy-* | oma* | once-bin | t3code-bin | openai-codex-desktop | perplexity | grok-bot | hermes-desktop | openclaw)
       echo '?'
       return
@@ -110,7 +149,15 @@ is_present() {
   case $target in
     -) return 0 ;;
     '?') return 1 ;;
-    '!'*) command -v "$1" >/dev/null 2>&1 && return 0; return 1 ;;
+    '!'*)
+      local probe=${PROBE[$1]:-$1}
+      if [[ $probe == @* ]]; then
+        eval "${probe#@}" >/dev/null 2>&1
+      else
+        command -v "$probe" >/dev/null 2>&1
+      fi
+      return
+      ;;
   esac
   nix_installed "$target" && return 0
   command -v "$1" >/dev/null 2>&1

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# omarchy:summary=Remove fido2 authentication (declarative on OmniXY)
+
+cat <<'MSG'
+On OmniXY, fido2 authentication is part of your NixOS configuration. Remove
+
+  security.pam.u2f.enable = true;
+
+then run omarchy-update. Enrolled keys are in ~/.config/Yubico/u2f_keys.
+MSG

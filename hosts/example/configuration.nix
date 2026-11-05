@@ -17,7 +17,9 @@
   users.users.omnixy.initialPassword = "omnixy";
 
   networking.hostName = "omnixy";
-  time.timeZone = "Europe/London";
+  # Leave time.timeZone unset so the Omarchy timezone menu (timedatectl) can
+  # change it; setting it here pins the zone declaratively.
+  # time.timeZone = "Europe/London";
   i18n.defaultLocale = "en_GB.UTF-8";
   console.keyMap = "uk";
   services.xserver.xkb.layout = "gb";
