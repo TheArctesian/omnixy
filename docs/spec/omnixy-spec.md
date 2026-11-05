@@ -8,33 +8,33 @@
 
 ## Status summary
 
-| Status | First audit | Re-audit (after PRs #3 and #4) |
-|---|---|---|
-| `WORKS` | 163 | 236 |
-| `PARTIAL` | 34 | 28 |
-| `STUB` | 22 | 22 |
-| `BROKEN` | 99 | 24 |
-| `NOT VERIFIED` | 59 | 69 |
-| Total | 377 | 379 |
+| Status | First audit | Re-audit (after PRs #3 and #4) | After PR #5 |
+|---|---|---|---|
+| `WORKS` | 163 | 236 | 251 |
+| `PARTIAL` | 34 | 28 | 37 |
+| `STUB` | 22 | 22 | 22 |
+| `BROKEN` | 99 | 24 | 0 |
+| `NOT VERIFIED` | 59 | 69 | 69 |
+| Total | 377 | 379 | 379 |
 
-The re-audit adds ONX-13-013 and ONX-13-014. Re-audit count for each section (`WORKS`/`PARTIAL`/`STUB`/`BROKEN`/`NOT VERIFIED`):
+The re-audit adds ONX-13-013 and ONX-13-014. PR #5 updates the 24 rows that were `BROKEN`, and ONX-14-006. Count for each section after PR #5 (`WORKS`/`PARTIAL`/`STUB`/`BROKEN`/`NOT VERIFIED`):
 
 | Section | WORKS | PARTIAL | STUB | BROKEN | NOT VERIFIED |
 |---|---|---|---|---|---|
 | 1 | 2 | 1 | 0 | 0 | 0 |
 | 3 | 14 | 1 | 0 | 0 | 0 |
-| 4 | 16 | 0 | 0 | 3 | 10 |
-| 5 | 16 | 0 | 0 | 1 | 1 |
+| 4 | 17 | 2 | 0 | 0 | 10 |
+| 5 | 17 | 0 | 0 | 0 | 1 |
 | 6 | 31 | 1 | 0 | 0 | 1 |
 | 7 | 14 | 1 | 0 | 0 | 0 |
 | 8 | 5 | 2 | 0 | 0 | 7 |
-| 9 | 36 | 1 | 0 | 1 | 5 |
-| 10 | 6 | 2 | 0 | 2 | 2 |
-| 11 | 66 | 12 | 19 | 14 | 30 |
+| 9 | 37 | 1 | 0 | 0 | 5 |
+| 10 | 7 | 3 | 0 | 0 | 2 |
+| 11 | 76 | 16 | 19 | 0 | 30 |
 | 12 | 8 | 1 | 0 | 0 | 1 |
 | 13 | 4 | 1 | 0 | 0 | 9 |
-| 14 | 5 | 2 | 2 | 2 | 1 |
-| 15 | 10 | 1 | 0 | 1 | 1 |
+| 14 | 5 | 4 | 2 | 0 | 1 |
+| 15 | 11 | 1 | 0 | 0 | 1 |
 | 16 | 3 | 2 | 1 | 0 | 1 |
 
 ## 1. Scope
@@ -125,7 +125,7 @@ Status values:
 | ONX-4-006 | The example host must set user `omnixy`, password "omnixy", host name `omnixy`, `Europe/London`, `en_GB`, keymap `uk`, xkb `gb`, systemd-boot and stateVersion 26.05. | WORKS | `hosts/example/default.nix`. |
 | ONX-4-007 | The VM host must set autoLogin, no preinstalls, no plymouth, 8 GB RAM, 4 cores and `virtio-vga-gl`. | WORKS | `hosts/vm`. |
 | ONX-4-008 | The ISO host must boot a graphical live session with autoLogin, `gparted` and `disko`. Its volume ID must be `OMNIXY`. | NOT VERIFIED | `hosts/iso`. No ISO build was run. |
-| ONX-4-009 | The ISO must give a guided installer. | BROKEN | `hosts/iso` has no installer program. `REPORT.md` lists this item as open. |
+| ONX-4-009 | The ISO must give a guided installer. | PARTIAL | `omnixy-install` (gum TUI) asks the upstream questions, partitions with disko (ESP + btrfs, optional LUKS2), writes a flake in `/etc/nixos` and runs `nixos-install`. The ISO autostarts it. `checks.installer` tests the dry run. @INSTALL@ |
 | ONX-4-010 | The display manager must start the session `omnixy`. | WORKS | `modules/desktop.nix` defaultSession `omnixy`; VM test logs in through SDDM autologin. |
 | ONX-4-011 | `omnixy-session` must source the uwsm env.d file, run `omnixy-seed-user` and then run `uwsm start -g -1 -e -D Hyprland hyprland.desktop`. | WORKS | `packages/omarchy/bin/omnixy-session`; VM test. |
 | ONX-4-012 | `omnixy-seed-user` must copy the skel tree into HOME without overwriting existing files. | WORKS | `cp -rn --no-preserve=mode,ownership`; VM test checks `hyprland.lua`, `.bashrc` and `theme.name`. |
@@ -134,7 +134,7 @@ Status values:
 | ONX-4-015 | The autostart must run `omarchy-launch-shell`, `omarchy-provision-first-run`, `omarchy-powerprofiles-init`, `omarchy-hyprland-monitor-watch`, `udiskie --automount` and `omarchy-hook post-boot`. | WORKS | `default/hypr/autostart.lua`; all commands exist in the system path. |
 | ONX-4-016 | First run must enable the user units `bt-agent`, `omarchy-recover-internal-monitor`, `omarchy-sleep-lock`, `omarchy-migrate-notify`, `omarchy-fcitx5` and `omarchy-crash-watch`. | WORKS | `enable-user-units.sh` runs `systemctl --user enable --now`; the units come from `systemd.packages`. |
 | ONX-4-017 | First run must set the GNOME theme with gsettings (`Adwaita-dark`, `prefer-dark`, `Yaru-blue`). | NOT VERIFIED | `glib` and the schemas path are present; not run. |
-| ONX-4-018 | First run must run `omarchy-audio-tuning on`. | BROKEN | `pactl` is now present. The tuning stops because it checks `/usr/lib/lv2/lsp-plugins.lv2`, which does not exist on NixOS. See ONX-11-102. |
+| ONX-4-018 | First run must run `omarchy-audio-tuning on`. | WORKS | The LV2 bundle of lsp-plugins is in the base packages. The script path is rewritten to `/run/current-system/sw/lib/lv2/`. The VM test checks `limiter_stereo.ttl` and `LV2_PATH` in the user manager. |
 | ONX-4-019 | First run must wait for the network with `nm-online` and then show the update notification. | WORKS | `nm-online` is in the system path. |
 | ONX-4-020 | First run must show the voxtype, fingerprint and agent invitations through hooks. | NOT VERIFIED | Hooks exist in the skel tree; not run. |
 | ONX-4-021 | `omarchy-provision-user` must create the XDG user directories and GTK bookmarks. | NOT VERIFIED | `xdg-user-dirs` is present; not run. |
@@ -145,7 +145,7 @@ Status values:
 | ONX-4-026 | `install/user/mise-work.sh` must create `~/Work`. Node must come from a tarball only in the ISO context. | NOT VERIFIED | Not run. |
 | ONX-4-027 | `install/user/mise.sh` must install the agent CLIs (codex, claude, crush, gemini, gh, copilot, opencode, playwright, pi, omp, grok, cursor-agent, ghui, hunk, muse) through `omarchy-mise-install`. | NOT VERIFIED | `mise` is present. Prebuilt binaries need a dynamic loader; `programs.nix-ld` is false. See ONX-11-132. |
 | ONX-4-028 | First run must write the finalize-user marker. | NOT VERIFIED | Not run. |
-| ONX-4-029 | The hardware fix scripts in `install/user` (asus, framework, dell, nouveau) must run. | BROKEN | `pactl` is now present. asusctl is still absent. No NixOS module mirrors the quirks. See section 14. |
+| ONX-4-029 | The hardware fix scripts in `install/user` (asus, framework, dell, nouveau) must run. | PARTIAL | `modules/hardware.nix` ports `install/hardware` (see `docs/hardware.md`). The `install/user/hardware` scripts run at first login and their tools are present. `asusctl` and `qmk_hid` need `omnixy.hardware.asus.enable` or `omnixy.hardware.framework.enable`. Not tested on that hardware. |
 
 ## 5. Packages
 
@@ -166,7 +166,7 @@ Status values:
 | ONX-5-013 | The system path must provide the Tesseract English data for OCR. | NOT VERIFIED | Not checked in the tensaku closure. |
 | ONX-5-014 | The system must provide `omarchy-nvim` (the LazyVim configuration). | WORKS | `packages/omarchy-nvim.nix` is in the core list. `omnixy-seed-user` runs `omarchy-nvim-setup` when `~/.config/nvim` is absent. The VM test checks the seeded files. |
 | ONX-5-015 | The system must provide the Oma apps `omacalc`, `omacut`, `omawrite`, `aether` and `omazed`. | WORKS | `packages/aether.nix`, `oma-qt-app.nix` and `omazed.nix` build. Preinstalls add aether, omacalc, omacut and omawrite. `omnixy-pkg` installs omazed from `omnixy#omazed`. The VM test opens omacalc and omawrite. |
-| ONX-5-016 | The system must provide `tobi-try` and `asdcontrol`. | BROKEN | Not packaged; comment in `modules/packages.nix`. `docs/spec/gaps.md` lists it as open. |
+| ONX-5-016 | The system must provide `tobi-try` and `asdcontrol`. | WORKS | `packages/tobi-try.nix` and `packages/asdcontrol.nix` are in the base packages. `modules/tuning.nix` has upstream's narrow `asdcontrol` sudoers grant. The VM test runs `try --help` and `sudo -n -l asdcontrol --detect`. |
 | ONX-5-017 | The module must drop the Arch-only packages `yay`, `expac`, `fakeroot`, `pacman-contrib`, `kernel-modules-hook`, `qemu-user-static-binfmt`, `ufw` and `ufw-docker`. | WORKS | `modules/packages.nix` comment. |
 | ONX-5-018 | The `localsend` command must exist. | WORKS | With preinstalls, `modules/packages.nix` links `localsend` to `localsend_app`. |
 
@@ -285,7 +285,7 @@ Status values:
 | ONX-9-032 | The reminder, time, battery and weather notification bindings must work. | WORKS | Static scan. |
 | ONX-9-033 | SUPER+SHIFT+CTRL+A and the SUPER+CTRL panel bindings (A, B, D, ALT+D, W, P) must open the agent and the panels. | NOT VERIFIED | Shell IPC; not tested. |
 | ONX-9-034 | SUPER+CTRL+T must open btop. SUPER+CTRL+L must lock. | WORKS | `btop` present; lock PAM present. |
-| ONX-9-035 | SUPER+CTRL+X and F9 must start dictation. | BROKEN | `voxtype` is absent until install. The install path is not verified. |
+| ONX-9-035 | SUPER+CTRL+X and F9 must start dictation. | WORKS | `voxtype-bin` maps to nixpkgs `voxtype` (1.1.1). The install script points the generated unit at the profile's `voxtype`, not at a store path. Static scan: all commands present after install. The model download was not run. |
 | ONX-9-036 | SUPER+C, SUPER+V and SUPER+X must copy, paste and cut. SUPER+CTRL+V must open the clipboard manager. | NOT VERIFIED | `wl-clipboard` present. `ydotool` and `cliphist` are absent; the scripts were not checked in full. |
 | ONX-9-037 | The volume keys must change the volume. | WORKS | `pactl` is present (ONX-5-008). The VM test runs `pactl info`. |
 | ONX-9-038 | XF86AudioMicMute must mute the microphone. | WORKS | The binding calls `wpctl`, which is present. |
@@ -303,9 +303,9 @@ Status values:
 | ONX-10-002 | The first login must apply `omnixy.theme`. | WORKS | VM test finds `theme.name`. |
 | ONX-10-003 | `omarchy-theme-set <name>` must change `theme.name`. | WORKS | VM test checks `theme.name` after `omarchy-theme-set Catppuccin`. |
 | ONX-10-004 | A second `omarchy-theme-set` must replace all theme files. | WORKS | `omnixy-cp` makes the store copies writable. The VM test switches to Catppuccin and then Gruvbox. It finds `colors.toml` and no `next-theme`. |
-| ONX-10-005 | `omarchy-theme-set-browser` must set the Chromium theme color through policy. | BROKEN | `PACKAGED_PATH` and the sudoers grant now match. As root, the script sets `PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin`. NixOS has no `install`, `mktemp` or `rm` there, so the root half fails. |
+| ONX-10-005 | `omarchy-theme-set-browser` must set the Chromium theme color through policy. | WORKS | As root, the script now sets `PATH` to the system profile (the same sed as `omarchy-dns`, which the VM test runs as root). The sudoers grant matches. |
 | ONX-10-006 | `omarchy-theme-set-vscode` must theme VS Code and Cursor. | WORKS | The `/usr/bin/cursor` test is gone. `set_theme "cursor"` runs unless `skip-cursor-theme-changes` is on. |
-| ONX-10-007 | `omarchy-theme-set-keyboard-asus-rog` and `omarchy-theme-set-keyboard-f16` must set the keyboard color. | BROKEN | `asusctl` and `qmk_hid` are absent. |
+| ONX-10-007 | `omarchy-theme-set-keyboard-asus-rog` and `omarchy-theme-set-keyboard-f16` must set the keyboard color. | PARTIAL | `asusctl` comes with `omnixy.hardware.asus.enable` and `qmk_hid` with `omnixy.hardware.framework.enable`. `omnixy-hardware-detect` prints the option. Off by default. Not tested on that hardware. |
 | ONX-10-008 | `omarchy-theme-install` must install a theme from a git URL. | NOT VERIFIED | `git` present; it then calls `omarchy-theme-set`, which works (ONX-10-004). Not run. |
 | ONX-10-009 | The background commands must change the background. | WORKS | Shell background plugin; static scan. |
 | ONX-10-010 | SDDM must use the `omarchy` theme. | NOT VERIFIED | `services.displayManager.sddm.theme = "omarchy"`; `omnixy-sddm-theme` built. Not seen on screen. |
@@ -347,18 +347,18 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 | ONX-11-011 | The `omarchy-install-*` commands must install packages through `omarchy-pkg-add`. | PARTIAL | `omarchy-pkg-add` calls `omnixy-pkg add`, which runs `nix profile add --impure`. Rows ONX-11-012 to ONX-11-033 give the result for each command. No install command was run. |
 | ONX-11-012 | `omarchy-install-preinstalls` must install the upstream preinstall set. | NOT VERIFIED | All names now resolve: `aether`, `omacut`, `omacalc` and `omawrite` to `omnixy#<name>`, `kdenlive` to `kdePackages.kdenlive`. The install needs the network; not run. |
 | ONX-11-013 | `omarchy-install-browser` must install Chrome, Edge, Brave and Zen. | PARTIAL | `omarchy-pkg-aur-add` becomes `omarchy-pkg-add`. Chrome, Edge and Brave map to nixpkgs. `zen-browser-bin` maps to `?`. |
-| ONX-11-014 | `omarchy-install-editor-emacs` must install Emacs. | BROKEN | It installs `omarchy-emacs`, which maps to `?`. `docs/spec/gaps.md` lists it as open. |
+| ONX-11-014 | `omarchy-install-editor-emacs` must install Emacs. | WORKS | `omarchy-emacs` maps to `omnixy#omarchy-emacs` (`packages/omarchy-emacs.nix`), and `emacs-wayland` to `emacs-pgtk`. `omarchy-install-emacs` links nixpkgs' `emacs.service` into the user's systemd. The package builds. The install was not run in the VM. |
 | ONX-11-015 | `omarchy-install-editor-zed` must install Zed. | NOT VERIFIED | `zed` maps to `zed-editor` and `omazed` to `omnixy#omazed`. Both build or evaluate. The install needs the network; not run. |
 | ONX-11-016 | Install › Style › Font must install the 6 Nerd fonts. | NOT VERIFIED | The six `ttf-*-nerd` names map to `nerd-fonts.*`. The install needs the network; not run. |
 | ONX-11-017 | `omarchy-install-gaming-retroarch` must install RetroArch with cores and assets. | NOT VERIFIED | `retroarch` maps to `retroarch-full`. The `libretro-*` and `retroarch-assets-*` names map to `-`. Core paths point at the nix profile. Not run. |
-| ONX-11-018 | `omarchy-install-gaming-lutris` must install Lutris. | BROKEN | It runs `sudo sed` on `/usr/bin/lutris`. nixpkgs marks a Lutris dependency insecure. `docs/spec/gaps.md` lists it as open. |
+| ONX-11-018 | `omarchy-install-gaming-lutris` must install Lutris. | WORKS | `lutris` maps to `omnixy#lutris`, exported with gtk2's deprecation flag set to warn. The `sudo sed /usr/bin/lutris` step is removed. Eval: the derivation evaluates. lib32 drivers map to `hardware.graphics.enable32Bit`. |
 | ONX-11-019 | `omarchy-install-service-1password` must install 1Password. | PARTIAL | A replacement prints the NixOS options, with `programs.chromium.extensions`, and exits 1. `omnixy-pkg present` probes `op` and `1password`, so it starts 1Password after the user sets the options. |
 | ONX-11-020 | `omarchy-install-service-sunshine` must install Sunshine. | PARTIAL | `omarchy-pkg-add sunshine` prints the option with `openFirewall` and stops. The script skips `ufw` when it is absent. It still reads its icon from `/usr/share/sunshine`. |
-| ONX-11-021 | `omarchy-install-service-nordvpn` must install NordVPN. | BROKEN | The package maps to `?`. |
-| ONX-11-022 | `omarchy-install-service-once` must install ONCE. | BROKEN | `once-bin` maps to `?`. |
-| ONX-11-023 | `omarchy-install-ai-chatgpt` must install the ChatGPT desktop app. | BROKEN | `openai-codex-desktop` maps to `?`. |
-| ONX-11-024 | `omarchy-install-ai-t3-code` must install T3 Code. | BROKEN | `t3code-bin` maps to `?`. |
-| ONX-11-025 | The Hermes, OpenClaw, Perplexity and Grok Bot installs must work. | BROKEN | `hermes-desktop`, `openclaw`, `perplexity` and `grok-bot` map to `?`. |
+| ONX-11-021 | `omarchy-install-service-nordvpn` must install NordVPN. | PARTIAL | `nordvpn-bin` maps to `omnixy.features.nordvpn` (nordvpnd and the `nordvpn` group). The install command prints the option until it is set. Eval with the option: OK. |
+| ONX-11-022 | `omarchy-install-service-once` must install ONCE. | PARTIAL | `once-bin` maps to `omnixy.features.once` (`packages/once.nix` and `once-background.service`; needs Docker). The install command prints the option until it is set. Eval with the option: OK. |
+| ONX-11-023 | `omarchy-install-ai-chatgpt` must install the ChatGPT desktop app. | WORKS | `openai-codex-desktop` maps to nixpkgs `chatgpt`, which provides `bin/chatgpt` and `chatgpt.desktop`. The package builds. |
+| ONX-11-024 | `omarchy-install-ai-t3-code` must install T3 Code. | WORKS | `t3code-bin` maps to nixpkgs `t3code`, which provides `t3`, `t3code-desktop` and `t3code.desktop`. The package builds. |
+| ONX-11-025 | The Hermes, OpenClaw, Perplexity and Grok Bot installs must work. | WORKS | Perplexity, Grok Bot and Zen are built from upstream's packages (`packages/perplexity.nix`, `grok-bot.nix`, `zen-browser.nix`). OpenClaw is upstream's seed (`packages/openclaw-seed.nix`); the install was run in a scratch home and `openclaw --version` works. Hermes comes from the hermes-agent flake; the install and remove scripts were run in a scratch home. Onboarding needs API keys and was not run. |
 | ONX-11-026 | `omarchy-install-gaming-geforce-now` must install GeForce NOW. | PARTIAL | `flatpak` maps to `!services.flatpak.enable = true;`. The command prints the option and stops. After the user sets it, the probe finds `flatpak`. |
 | ONX-11-027 | `omarchy-install-gaming-steam` must install and start Steam. | PARTIAL | Steam needs `programs.steam.enable`. The command prints the option. `gtk-launch` is now present. |
 | ONX-11-028 | `omarchy-install-service-tailscale` must install and start Tailscale. | PARTIAL | `systemctl enable` acts on a unit that NixOS manages. `services.tailscale.enable` is needed. |
@@ -395,9 +395,9 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | ONX-11-046 | `omarchy-theme-set` | WORKS | ONX-10-004. |
-| ONX-11-047 | `omarchy-theme-set-browser`, `omarchy-theme-set-browser-policy` | BROKEN | ONX-10-005. |
+| ONX-11-047 | `omarchy-theme-set-browser`, `omarchy-theme-set-browser-policy` | WORKS | ONX-10-005. |
 | ONX-11-048 | `omarchy-theme-set-vscode` | WORKS | ONX-10-006. |
-| ONX-11-049 | `omarchy-theme-set-keyboard-asus-rog`, `omarchy-theme-set-keyboard-f16` | BROKEN | ONX-10-007. |
+| ONX-11-049 | `omarchy-theme-set-keyboard-asus-rog`, `omarchy-theme-set-keyboard-f16` | PARTIAL | ONX-10-007. |
 | ONX-11-050 | `omarchy-theme-list`, `omarchy-theme-current`, `omarchy-theme-next`, `omarchy-theme-bg-*` | WORKS | Static scan: all dependencies present. `omarchy-theme-next` calls `omarchy-theme-set`, which works (ONX-10-004). |
 | ONX-11-051 | `omarchy-theme-install`, `omarchy-theme-update`, `omarchy-theme-remove` | NOT VERIFIED | `git` present; not run. |
 
@@ -515,7 +515,7 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 | ONX-11-099 | `omarchy-audio-output-volume` must change the volume. | WORKS | `pactl` is present (ONX-5-008). The VM test runs `pactl info`. |
 | ONX-11-100 | `omarchy-audio-output-switch` must switch the output. | WORKS | `pactl` is present (ONX-5-008). |
 | ONX-11-101 | `omarchy-audio-input-set-default` and the sink availability check must work. | WORKS | `pactl` is present (ONX-5-008). |
-| ONX-11-102 | `omarchy-audio-tuning` must apply the speaker tuning. | BROKEN | `pactl` is present. The script checks `/usr/lib/lv2/lsp-plugins.lv2/limiter_stereo.ttl`. NixOS has no `/usr/lib/lv2`, so it stops with "lsp-plugins-lv2 is required". |
+| ONX-11-102 | `omarchy-audio-tuning` must apply the speaker tuning. | WORKS | ONX-4-018. |
 | ONX-11-103 | The microphone mute command must work. | WORKS | It calls `wpctl`. |
 
 ### 11.19 Capture commands (`omarchy-capture-*`)
@@ -534,7 +534,7 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 |---|---|---|---|
 | ONX-11-141 | `omarchy-plymouth-set`, `omarchy-plymouth-reset`, `omarchy-refresh-plymouth`, `omarchy-refresh-sddm` and Style › Unlock must change the boot and login look. | PARTIAL | `omarchy-plymouth-set` and `omarchy-plymouth-reset` print the NixOS option. `omarchy-refresh-plymouth` and `omarchy-refresh-sddm` exit 0. The menu sed removes Style › Unlock. No run-time change occurs. |
 | ONX-11-109 | `omarchy-plymouth-current` must show the current logo. | WORKS | It reads `/run/current-system/sw/share/plymouth/themes/omarchy/logo.png`. `modules/system.nix` puts the theme in the system profile when `features.plymouth` is on. |
-| ONX-11-110 | `omarchy-setup-direct-boot` must create a UEFI boot entry. | BROKEN | `efibootmgr` is now present. The script still needs an omarchy UKI in `/boot/EFI/Linux`. NixOS does not make one. |
+| ONX-11-110 | `omarchy-setup-direct-boot` must create a UEFI boot entry. | PARTIAL | NixOS makes no UKI. `omarchy-setup-direct-boot` prints `boot.loader.timeout = 0;`, which hides the boot menu and keeps rollback (hold Space). |
 | ONX-11-111 | `omarchy-drive-password` must change the disk password. | NOT VERIFIED | `cryptsetup` is now present. It needs a LUKS disk; not run. |
 
 ### 11.21 Agent commands (`omarchy-agent*`)
@@ -563,7 +563,7 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| ONX-11-119 | The voxtype commands must start dictation. | BROKEN | `voxtype` is absent until install. The install was not run. |
+| ONX-11-119 | The voxtype commands must start dictation. | WORKS | ONX-9-035. |
 
 ### 11.25 Setup commands (`omarchy-setup-*`)
 
@@ -573,7 +573,7 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 | ONX-11-121 | `omarchy-setup-security-fingerprint` must tell the user the NixOS options for the fingerprint reader. | WORKS | Replacement prints options. |
 | ONX-11-122 | `omarchy-setup-security-sshd` must enable the SSH server. | PARTIAL | The `sshd` probe finds the server after the user sets `services.openssh.enable`. Before that, the script prints the option and stops. It skips `ufw` when it is absent. |
 | ONX-11-123 | `omarchy-sudo-passwordless` must enable sudo without a password. | WORKS | `modules/tuning.nix` adds `@includedir /etc/sudoers.d` and a tmpfiles `r!` rule for the timed files. |
-| ONX-11-124 | `omarchy-windows-vm` must install and start a Windows VM. | BROKEN | The `/usr/bin` paths are gone. As root, the script sets `PATH=/usr/bin:/usr/sbin:/bin:/sbin`. NixOS has no tools there, so the root half fails. `xfreerdp3` is not verified. |
+| ONX-11-124 | `omarchy-windows-vm` must install and start a Windows VM. | WORKS | As root, the script sets `PATH` to the system profile. The `/usr/bin` paths are gone. `xfreerdp3` is not verified. |
 | ONX-11-125 | The default-program setup entries must set Helix and Sublime as editors. | PARTIAL | Helix installs `hx`, so the `WHEN` condition hides the entry. Sublime installs `subl`. |
 
 ### 11.26 Network commands (`omarchy-network-*`, `omarchy-dns`)
@@ -581,7 +581,7 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | ONX-11-126 | `omarchy-network-status` and `omarchy-network-band` must show the Wi-Fi band. | NOT VERIFIED | `iw` is now present. No Wi-Fi hardware test. |
-| ONX-11-127 | `omarchy-dns` (Setup › Network › DNS) must change the DNS server. | BROKEN | `PACKAGED_PATH` and the sudoers grant now match; the VM test runs `sudo -n -l`. As root, the script sets `PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin`. NixOS has no `install`, `nmcli` or `awk` there, so the root half fails. |
+| ONX-11-127 | `omarchy-dns` (Setup › Network › DNS) must change the DNS server. | WORKS | The VM test runs `sudo -n omarchy-dns Cloudflare` and `DHCP`. They write `/etc/systemd/resolved.conf.d/90-omarchy-dns.conf`, and `resolvectl` shows 1.1.1.1. |
 
 ### 11.27 Helper commands (`omarchy-cmd-*`)
 
@@ -656,12 +656,12 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 |---|---|---|---|
 | ONX-14-001 | The system must enable redistributable firmware and the wireless regulatory database. | WORKS | Eval. |
 | ONX-14-002 | `hardware.graphics` must be on. | WORKS | Eval. |
-| ONX-14-003 | The upstream hardware quirks in `install/hardware` (Apple, ASUS, Dell, Framework, Surface, NVIDIA, Intel and others) must apply. | BROKEN | No NixOS module mirrors them. `REPORT.md` lists this item. |
+| ONX-14-003 | The upstream hardware quirks in `install/hardware` (Apple, ASUS, Dell, Framework, Surface, NVIDIA, Intel and others) must apply. | PARTIAL | `modules/hardware.nix`: quirks that check the hardware themselves are on by default; model-specific ones are `omnixy.hardware.*` options; `omnixy-hardware-detect` prints them. `docs/hardware.md` maps each upstream script. Evals with each option: OK. Not tested on that hardware. |
 | ONX-14-004 | Hybrid GPU switch must work. | STUB | ONX-11-009. |
 | ONX-14-005 | Hibernation must work. | STUB | ONX-11-008. |
-| ONX-14-006 | `thermald` must run on Intel systems. | WORKS | `modules/tuning.nix` enables `thermald` when `hardware.cpu.intel.updateMicrocode` is true. Eval on the example host: false (no Intel microcode set). |
+| ONX-14-006 | `thermald` must run on Intel systems. | WORKS | `modules/hardware.nix` enables thermald and intel-lpmd on x86_64. They start only on the Intel laptops upstream installs them on. |
 | ONX-14-007 | `fprintd` must be available for fingerprint readers. | PARTIAL | Option only; default off. The setup command prints the option. |
-| ONX-14-008 | ASUS and Framework keyboard lights must work. | BROKEN | ONX-10-007. |
+| ONX-14-008 | ASUS and Framework keyboard lights must work. | PARTIAL | ONX-10-007. |
 | ONX-14-009 | The Xbox controller driver `xpadneo` must install. | PARTIAL | It maps to `!`; the command prints the option. The probe tests `/sys/module/hid_xpadneo` (ONX-11-040). |
 | ONX-14-010 | `tlp` must not run. | WORKS | Eval false; `power-profiles-daemon` runs. |
 | ONX-14-011 | The kernel must be 6.18. | WORKS | Eval: 6.18.60. |
@@ -674,7 +674,7 @@ Each stub prints a message and exits with code 1. The menu sed hides most of the
 | ONX-15-001 | The firewall must be on. | WORKS | `networking.firewall` with `features.firewall`. |
 | ONX-15-002 | sudo must ask for a password for the wheel group. | WORKS | `wheelNeedsPassword` true. |
 | ONX-15-003 | sudo must allow the upstream rules in `/etc/sudoers.d` (`omarchy-dns`, `omarchy-theme-browser`, `omarchy-tzupdate`, `passwd-tries`). | WORKS | `modules/tuning.nix` sets `passwd_tries=10`, `@includedir` and NOPASSWD grants for `omarchy-dns`, `omarchy-theme-set-browser-policy` and `timedatectl set-timezone`. The VM test runs `sudo -n -l` for `omarchy-dns`. |
-| ONX-15-004 | faillock must lock the account after 10 failures for 120 s. | BROKEN | The dead `faillock.conf` is removed. No PAM stack has `pam_faillock`, so there is no lockout. `docs/spec/gaps.md` lists it as open. |
+| ONX-15-004 | faillock must lock the account after 10 failures for 120 s. | WORKS | `modules/services.nix` adds pam_faillock (`deny=10 unlock_time=120`) to login, sudo, su, polkit-1, sshd and the lock screen. The VM test fails 10 logins, checks the lock, resets it and logs in. |
 | ONX-15-005 | Login must not add a delay after a failure. | WORKS | `failDelay` false. |
 | ONX-15-006 | The kernel must load the LSMs `landlock`, `yama` and `bpf`. | WORKS | Eval kernelParams. |
 | ONX-15-007 | GNOME Keyring must provide the Secret portal. | WORKS | `modules/desktop.nix`; wrapper `gnome-keyring-daemon`. |

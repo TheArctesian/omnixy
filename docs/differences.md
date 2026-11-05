@@ -69,9 +69,8 @@ again.
   apply). T2 fan control (t2fanrd) is not packaged, and the T2 and Surface
   kernels come from [nixos-hardware](https://github.com/NixOS/nixos-hardware).
   See [hardware.md](hardware.md).
-- **Offline ISO installer / provisioning flow:** the OmniXY ISO is a live desktop
-  with the standard NixOS installer tools (`nixos-install`, `disko`), not Omarchy's
-  guided installer.
+- **Offline install:** `omnixy-install`, the ISO's guided installer, needs a
+  network connection; it fetches the OmniXY flake from GitHub.
 
 ## Known gaps
 
