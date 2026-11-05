@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # omarchy:summary=Nix backend for Omarchy's package helpers (add, drop, present, missing)
-# omarchy:args=<add|drop|present|missing|resolve> <packages...>
+# omarchy:args=<add|drop|present|missing|resolve|list> [packages...]
 # omarchy:hidden=true
 #
 # Omarchy's install scripts speak Arch package names. On OmniXY they are mapped
@@ -228,8 +228,15 @@ case $cmd in
         nix profile remove "$target" >/dev/null 2>&1 || true
     done
     ;;
+  list)
+    # name version (source), the stand-in for `pacman -Q` in debug logs.
+    nix-store -q --references /run/current-system/sw 2>/dev/null |
+      sed -nE 's#^/nix/store/[a-z0-9]{32}-(.+)-([0-9][^-]*)$#\1 \2 (system)#p'
+    nix profile list --json 2>/dev/null |
+      jq -r '.elements | to_entries[] | "\(.key) \(.value.storePaths[0] // "" | capture("-(?<v>[0-9][^-]*)$").v // "?") (profile)"' 2>/dev/null
+    ;;
   *)
-    echo "Usage: omnixy-pkg <add|drop|present|missing|resolve> <packages...>" >&2
+    echo "Usage: omnixy-pkg <add|drop|present|missing|resolve|list> [packages...]" >&2
     exit 2
     ;;
 esac

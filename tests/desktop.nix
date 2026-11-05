@@ -150,7 +150,13 @@ pkgs.testers.runNixOSTest {
         wait_for_window("omacalc")
         machine.sleep(10)
         machine.screenshot("05-omacalc")
-        user("hyprctl dispatch closewindow class:omacalc", check=False)
+        user("pkill -f 'bin/[.]omacalc-wrapped'", check=False)
+        for _ in range(12):
+            if "omacalc" not in user("hyprctl -j clients").lower():
+                break
+            machine.sleep(5)
+        else:
+            raise Exception("omacalc window did not close")
         machine.send_key("meta_l-shift-w")
         wait_for_window("omawrite")
         machine.sleep(10)

@@ -147,6 +147,14 @@ stdenvNoCC.mkDerivation {
 
     # AUR installs go through the same nixpkgs mapping as repo packages.
     grep -rlZ 'omarchy-pkg-aur-add' $share/bin | xargs -0 -r sed -i 's#omarchy-pkg-aur-add#omarchy-pkg-add#g'
+    # Debug logs list nix packages instead of pacman's.
+    sed -i -E \
+      -e 's#\$\(pacman -Q omarchy-dev .*echo "unknown"\)#$(omarchy-version)#' \
+      -e 's#^\$\(\{ expac .*\| sort\)$#$(omnixy-pkg list | sort)#' \
+      $share/bin/omarchy-debug
+    sed -i -e 's#INSTALLED PACKAGES (pacman -Q)#INSTALLED PACKAGES (nix)#' \
+      -e 's#pacman -Q 2>/dev/null || echo#omnixy-pkg list 2>/dev/null | sort || echo#' \
+      $share/bin/omarchy-upload-log
     # Package removals go through the nix profile.
     grep -rlZ 'sudo pacman -Rns --noconfirm' $share/bin | xargs -0 -r sed -i 's#sudo pacman -Rns --noconfirm#omarchy-pkg-drop#g'
 

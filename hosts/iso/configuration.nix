@@ -31,8 +31,15 @@
   };
   image.baseName = lib.mkForce "omnixy-${pkgs.omarchy.version}";
 
+  # The full preinstalls (LibreOffice, OBS, Kdenlive, ...) would add GBs;
+  # Omarchy's own apps are small, so the live session has them.
   environment.systemPackages = with pkgs; [
     gparted
     disko
+    aether
+    omacalc
+    omacut
+    omawrite
+    omazed
   ];
 }
