@@ -31,14 +31,12 @@
 
       # Opt-in installs that nixpkgs gates behind a config flag, built here so
       # `omnixy-pkg` can install them from the menu like upstream does:
-      # Lutris' FHS env still pulls gtk2 (marked broken as deprecated), and
-      # nixpkgs flags OpenClaw because it lets an LLM act on untrusted input.
+      # Lutris' FHS env still pulls gtk2 (marked broken as deprecated).
       pkgsOptIn = import nixpkgs {
         inherit system;
         config = {
           allowUnfree = true;
           problems.handlers."gtk+".broken = "warn";
-          allowInsecurePredicate = p: lib.getName p == "openclaw";
         };
       };
 
@@ -104,7 +102,10 @@
           perplexity
           zen-browser
           ;
-        inherit (pkgsOptIn) lutris openclaw;
+        inherit (pkgsOptIn) lutris;
+        # Omarchy's openclaw package is the seed of a self-updating install in
+        # ~/.openclaw, not nixpkgs' (store-bound) OpenClaw.
+        openclaw = pkgs.callPackage ./packages/openclaw-seed.nix { };
         iso = self.nixosConfigurations.iso.config.system.build.isoImage;
         vm = self.nixosConfigurations.vm.config.system.build.vm;
         default = pkgs.omarchy;
