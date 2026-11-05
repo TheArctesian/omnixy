@@ -21,6 +21,12 @@ else
   cp -rn --no-preserve=mode,ownership "$skel/." "$HOME/"
 fi
 
+# Omarchy's LazyVim config (upstream seeds it from /etc/skel). Only when there
+# is no Neovim config at all, so a user's own config is never touched.
+if [[ ! -e $HOME/.config/nvim ]] && command -v omarchy-nvim-setup >/dev/null; then
+  omarchy-nvim-setup >/dev/null 2>&1 || true
+fi
+
 # First session: apply the configured default theme before Hyprland starts so
 # the very first frame is themed (upstream does this in the ISO chroot).
 if [[ ! -s $HOME/.local/state/omarchy/current/theme.name ]]; then

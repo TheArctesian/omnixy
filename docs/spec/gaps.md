@@ -35,13 +35,13 @@ This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) w
 | Firmware update stubbed | `omarchy-update-firmware` runs `fwupdmgr` (fwupd is on); menu entry restored |
 | Reset Computer calls the factory-reset stub (ONX-11-082) | Menu entry removed |
 | Sunshine firewall (ONX-11-020) | Printed option includes `openFirewall`; the script already skips ufw when it is absent |
+| Omarchy's own apps: omacalc, omacut, omawrite, aether, omazed, omarchy-nvim (ONX-5-014/015, ONX-9-015/021, ONX-12-007/008) | Built from source in `packages/` (follow-up change). `omnixy-pkg` installs them from the registered `omnixy` flake. omarchy-nvim is seeded on login without the prebuilt plugin cache. |
 | Dead `faillock.conf` with no `pam_faillock` (ONX-15-004) | Removed (see open gaps) |
 
 ## Open gaps
 
 | Gap | Why it is still open |
 | --- | --- |
-| Omarchy's own apps: omacalc, omacut, omawrite, aether, omazed, omarchy-nvim (ONX-5-014/015, ONX-9-015/021, ONX-12-007/008) | Separate upstream projects with no nixpkgs packages. Each needs its own derivation. |
 | tobi-try, asdcontrol, voxtype install path, NordVPN, ONCE, ChatGPT/Codex desktop, T3 Code, Hermes, OpenClaw, Perplexity, Grok, Zen, omarchy-emacs (ONX-5-016, ONX-11-021…025, ONX-9-035) | Not in nixpkgs. They report "Not packaged for NixOS". |
 | Lutris | nixpkgs marks a dependency (gtk2) insecure. Installing needs `nixpkgs.config.permittedInsecurePackages`. The `sudo sed /usr/bin/lutris` step still fails. |
 | `pam_faillock` (OMA-6-048, OMA-8-056) | NixOS has no faillock option. Wiring it through `security.pam.services.*.rules` affects every login path and needs real-hardware testing first. NixOS has *no* lockout by default, so this is a hardening gap, not a usability one. |
