@@ -6,9 +6,10 @@
 #
 # Not carried over (Arch-only or replaced by NixOS): yay, expac, fakeroot,
 # pacman-contrib, kernel-modules-hook, qemu-user-static-binfmt, ufw/ufw-docker
-# (networking.firewall), mise-bin (mise), omarchy-nvim (seeded LazyVim, see
-# user.nix), dotnet-runtime, python-poetry-core, mariadb-libs. Not packaged
-# for NixOS yet: aether, omacalc, omacut, omawrite, tobi-try, asdcontrol.
+# (networking.firewall), mise-bin (mise), dotnet-runtime, python-poetry-core,
+# mariadb-libs. Omarchy's own apps (aether, omacalc, omacut, omawrite,
+# omarchy-nvim, omazed) are packaged in ../packages. Not packaged for NixOS
+# yet: tobi-try, asdcontrol.
 {
   config,
   lib,
@@ -33,6 +34,7 @@ let
     omnixy-fonts
     ttfx
     tensaku
+    omarchy-nvim
 
     # Desktop
     quickshell
@@ -166,7 +168,12 @@ let
     hicolor-icon-theme
   ];
 
+  # bin/omarchy-install-preinstalls: removable with omarchy-remove-preinstalls.
   preinstalls = with pkgs; [
+    aether
+    omacalc
+    omacut
+    omawrite
     libreoffice
     obsidian
     obs-studio

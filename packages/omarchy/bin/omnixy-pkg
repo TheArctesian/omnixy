@@ -17,7 +17,15 @@ set -uo pipefail
 
 # Arch name -> nixpkgs attribute. "!" means "needs a NixOS option", "-" means
 # "satisfied by OmniXY itself", "?" means "not packaged for NixOS".
+# "omnixy#x" is a package from the OmniXY flake (registered as `omnixy`,
+# pinned to the source this system was built from).
 declare -A MAP=(
+  [aether]=omnixy#aether
+  [omacalc]=omnixy#omacalc
+  [omacut]=omnixy#omacut
+  [omawrite]=omnixy#omawrite
+  [omazed]=omnixy#omazed
+  [omarchy-nvim]=omnixy#omarchy-nvim
   [1password]='!programs._1password-gui.enable = true;'
   [1password-cli]='!programs._1password.enable = true;'
   [bitwarden]=bitwarden-desktop
@@ -116,8 +124,8 @@ resolve() {
     echo "${MAP[$name]}"
     return
   fi
-  # Omarchy's own desktop apps (omacalc, omazed, once, t3code, ...) and other
-  # AUR-only builds have no nixpkgs equivalent.
+  # Other Omarchy desktop apps (once, t3code, ...) and AUR-only builds have
+  # no nixpkgs equivalent.
   case $name in
     # RetroArch's cores and assets are part of nixpkgs' retroarch-full.
     libretro-* | retroarch-assets-* | retroarch-joypad-autoconfig*)
@@ -136,7 +144,8 @@ resolve() {
 
 nix_installed() {
   # Anything in the system profile or the user's nix profile counts.
-  local attr=$1 pname=${1##*.}
+  local attr=${1#*#}
+  local pname=${attr##*.}
   nix profile list --json 2>/dev/null | jq -e --arg a "$attr" \
     '.elements | to_entries | any(.value.attrPath? // "" | endswith("." + $a))' >/dev/null 2>&1 && return 0
   nix-store -q --references /run/current-system/sw 2>/dev/null | grep -qE -- "^/nix/store/[a-z0-9]{32}-${pname}-[0-9]" && return 0
@@ -188,6 +197,7 @@ case $cmd in
         -) ;;
         '?') unsupported+=("$p") ;;
         '!'*) options+=("${target#!}") ;;
+        *'#'*) attrs+=("$target") ;;
         *) attrs+=("nixpkgs#$target") ;;
       esac
     done
@@ -203,7 +213,7 @@ case $cmd in
       status=1
     fi
     if (( ${#attrs[@]} > 0 )); then
-      echo "Installing into your nix profile: ${attrs[*]#nixpkgs#}"
+      echo "Installing into your nix profile: ${attrs[*]#*#}"
       NIXPKGS_ALLOW_UNFREE=1 nix profile add --impure "${attrs[@]}" || status=1
     fi
     exit $status
@@ -212,7 +222,9 @@ case $cmd in
     for p in "$@"; do
       target=$(resolve "$p")
       [[ $target == [-?!]* ]] && continue
+      target=${target#*#}
       nix profile remove "legacyPackages.x86_64-linux.$target" >/dev/null 2>&1 ||
+        nix profile remove "packages.x86_64-linux.$target" >/dev/null 2>&1 ||
         nix profile remove "$target" >/dev/null 2>&1 || true
     done
     ;;

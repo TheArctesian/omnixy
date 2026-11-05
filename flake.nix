@@ -49,6 +49,8 @@
         omnixy = {
           imports = [ ./modules ];
           nixpkgs.overlays = [ self.overlays.default ];
+          # `omnixy#omacalc` etc. for omnixy-pkg, pinned to this source.
+          nix.registry.omnixy.flake = self;
         };
       };
 
@@ -70,6 +72,12 @@
           omnixy-fonts
           ttfx
           tensaku
+          aether
+          omazed
+          omarchy-nvim
+          omacalc
+          omawrite
+          omacut
           ;
         iso = self.nixosConfigurations.iso.config.system.build.isoImage;
         vm = self.nixosConfigurations.vm.config.system.build.vm;

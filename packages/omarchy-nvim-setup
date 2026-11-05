@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Install Omarchy's Neovim (LazyVim) config for the current user
+# omarchy:args=[--force]
+#
+# OmniXY version of omarchy-pkgs' omarchy-nvim-setup.
+# omarchy-nvim-setup: install the config only when ~/.config/nvim is missing.
+# omarchy-nvim-refresh (setup --force): back up the existing config, clear
+# Neovim's data, state and cache, and install the defaults again.
+# There is no packaged plugin cache: lazy.nvim installs the plugins on the
+# next `nvim` start.
+
+set -euo pipefail
+
+CONFIG_SOURCE_DIR="@config@"
+CONFIG_DIR="${HOME}/.config/nvim"
+DATA_DIR="${HOME}/.local/share/nvim"
+STATE_DIR="${HOME}/.local/state/nvim"
+CACHE_DIR="${HOME}/.cache/nvim"
+
+refresh=false
+
+while (($# > 0)); do
+  case "$1" in
+  --force | --refresh) refresh=true ;;
+  -h | --help)
+    cat <<'EOF'
+Usage: omarchy-nvim-setup [--force]
+       omarchy-nvim-refresh
+
+omarchy-nvim-setup installs Omarchy's Neovim config only when ~/.config/nvim
+is missing. omarchy-nvim-refresh backs up an existing config and installs the
+defaults again.
+EOF
+    exit 0
+    ;;
+  *)
+    echo "Unknown option: $1" >&2
+    exit 1
+    ;;
+  esac
+  shift
+done
+
+if [[ -d $CONFIG_DIR && $refresh != true ]]; then
+  echo "Neovim config already exists at $CONFIG_DIR; leaving it in place."
+  exit 0
+fi
+
+if [[ -e $CONFIG_DIR || -L $CONFIG_DIR ]]; then
+  backup="${CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
+  echo "Backing up $CONFIG_DIR to $backup"
+  mv "$CONFIG_DIR" "$backup"
+fi
+if [[ $refresh == true ]]; then
+  rm -rf "$DATA_DIR" "$STATE_DIR" "$CACHE_DIR"
+fi
+
+mkdir -p "$(dirname "$CONFIG_DIR")"
+# Store files are read-only; the copy must be editable.
+cp -r --no-preserve=mode,ownership "$CONFIG_SOURCE_DIR" "$CONFIG_DIR"
+
+# The theme plugin follows the current Omarchy theme.
+mkdir -p "$CONFIG_DIR/lua/plugins"
+ln -snf "../../../../.local/state/omarchy/current/theme/neovim.lua" "$CONFIG_DIR/lua/plugins/theme.lua"
+echo "Installed Neovim config to $CONFIG_DIR"
+
+for mime in text/plain text/english text/x-makefile text/x-c++hdr text/x-c++src \
+  text/x-chdr text/x-csrc text/x-java text/x-moc text/x-pascal text/x-tcl text/x-tex \
+  application/x-shellscript text/x-c text/x-c++ application/xml text/xml; do
+  xdg-mime default nvim.desktop "$mime" 2>/dev/null || true
+done
+
+if [[ $refresh == true ]]; then
+  echo "Neovim refresh complete!"
+else
+  echo "Neovim setup complete!"
+fi

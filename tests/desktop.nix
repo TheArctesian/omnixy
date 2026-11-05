@@ -13,7 +13,7 @@ pkgs.testers.runNixOSTest {
   node.pkgsReadOnly = false;
 
   nodes.machine =
-    { ... }:
+    { pkgs, ... }:
     {
       imports = [ self.nixosModules.default ];
 
@@ -27,6 +27,12 @@ pkgs.testers.runNixOSTest {
         features.plymouth = false;
       };
       users.users.alice.initialPassword = "alice";
+      # Preinstalls are off to keep the closure small; two of Omarchy's own
+      # apps are enough to check the Qt Quick builds start.
+      environment.systemPackages = [
+        pkgs.omacalc
+        pkgs.omawrite
+      ];
 
       virtualisation = {
         memorySize = 6144;
@@ -122,6 +128,33 @@ pkgs.testers.runNixOSTest {
         machine.succeed("id -nG alice | grep -qw docker")
         machine.succeed("test -f /run/current-system/sw/share/icons/hicolor/256x256/apps/hey.png")
         print(user("omnixy-pkg resolve ttf-iosevka-nerd zed openssh libretro-mame"))
+
+    with subtest("omarchy apps"):
+        # Omarchy's LazyVim config is seeded when ~/.config/nvim is missing.
+        machine.succeed("test -f /home/alice/.config/nvim/lua/plugins/omarchy-theme-hotreload.lua")
+        machine.succeed("test -w /home/alice/.config/nvim/init.lua")
+        machine.succeed("test -L /home/alice/.config/nvim/lua/plugins/theme.lua")
+        machine.succeed("test -e /home/alice/.config/nvim/lua/plugins/theme.lua")
+        print(user("omnixy-pkg resolve omacalc aether omazed omarchy-nvim"))
+        print(machine.succeed("nix registry list | grep omnixy"))
+        def wait_for_window(cls, timeout=120):
+            for _ in range(timeout // 5):
+                status, out = user("hyprctl -j clients", check=False)
+                if status == 0 and cls in out.lower():
+                    return
+                machine.sleep(5)
+            raise Exception(f"no {cls} window after {timeout}s")
+
+        # Super+Ctrl+Q is Omarchy's calculator binding, Super+Shift+W Omawrite.
+        machine.send_key("meta_l-ctrl-q")
+        wait_for_window("omacalc")
+        machine.sleep(10)
+        machine.screenshot("05-omacalc")
+        user("hyprctl dispatch closewindow class:omacalc", check=False)
+        machine.send_key("meta_l-shift-w")
+        wait_for_window("omawrite")
+        machine.sleep(10)
+        machine.screenshot("06-omawrite")
 
     with subtest("omarchy cli"):
         print(user("omarchy-version"))

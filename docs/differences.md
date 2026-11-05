@@ -46,13 +46,23 @@ removed. `omarchy-refresh-limine`, `omarchy-refresh-plymouth` and
 splash and login theme are declared in NixOS. AUR installs (Chrome, Edge, Brave)
 go through the nixpkgs mapping.
 
+## Omarchy's own apps
+
+omacalc, omacut, omawrite and aether are built from source in `packages/` and
+installed with the preinstalls (`omnixy.preinstalls.enable`). omazed is installed
+on demand by Install › Editor › Zed. `omarchy-pkg-add` installs any of them as
+`omnixy#<name>`: the system registers the OmniXY flake it was built from under
+that name.
+
+omarchy-nvim (Omarchy's LazyVim config) is part of the base system. On login, if
+`~/.config/nvim` does not exist, `omnixy-seed-user` runs `omarchy-nvim-setup`.
+Arch's package ships a prebuilt plugin cache. OmniXY can't build one without
+network access, so lazy.nvim downloads the plugins the first time you start
+`nvim`. `omarchy-nvim-refresh` backs up your config and installs the defaults
+again.
+
 ## Not packaged for NixOS yet
 
-- **Omarchy's own apps:** omacalc, omacut, omawrite, aether (theme designer). Their
-  bindings and menu entries do nothing.
-- **omarchy-nvim:** the Omarchy LazyVim setup ships as a separate Arch package. On
-  OmniXY, `nvim` starts unconfigured. Install LazyVim yourself, or use the Neovim
-  theme files Omarchy writes to `~/.local/state/omarchy/current/theme/neovim.lua`.
 - **Hardware quirks** from `install/hardware/` (Apple T2, Surface, ASUS ROG,
   Framework 16, Dell XPS, Broadcom Wi-Fi, NVIDIA). Use
   [nixos-hardware](https://github.com/NixOS/nixos-hardware) and the usual

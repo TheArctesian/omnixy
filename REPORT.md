@@ -40,7 +40,7 @@ This rewrite was done overnight on branch `rewrite-v4`. The old tree was replace
 | `omarchy-update` | `nix flake update` + `nixos-rebuild switch` on `omnixy.flake.path`, profile upgrade, mise, restart prompts |
 | Lock-screen PAM (`omarchy-apply-lock`) | `security.pam.services.omarchy-lock-{password,fingerprint}` |
 | User systemd units | shipped in the package and enabled in `modules/user.nix` |
-| ttfx, tensaku (not in nixpkgs) | packaged in `packages/` |
+| ttfx, tensaku, aether, omacalc, omacut, omawrite, omazed, omarchy-nvim (not in nixpkgs) | packaged in `packages/` |
 
 ## Dropped / not available
 
@@ -50,7 +50,7 @@ This rewrite was done overnight on branch `rewrite-v4`. The old tree was replace
 
 ## Still open
 
-1. **Omarchy's own apps are not packaged:** omacalc, omacut, omawrite, aether, and the omarchy-nvim LazyVim config. Their bindings do nothing.
+1. ~~Omarchy's own apps are not packaged~~ Done in a follow-up: omacalc, omacut, omawrite, aether, omazed and omarchy-nvim are in `packages/` (see [differences.md](docs/differences.md#omarchys-own-apps)).
 2. **Hardware quirks** from `install/hardware/` (T2 Macs, Surface, ASUS, Framework, NVIDIA): use nixos-hardware instead. They are not mirrored.
 3. **The ISO is a live desktop and has no guided installer.** You install with `nixos-install`/disko and the template. An Omarchy-style guided installer would be a separate project.
 4. **Not tested on real hardware.** The VM test uses software rendering. Real-GPU checks are still needed for Plymouth, SDDM theme rendering, suspend/lock and fingerprint.
