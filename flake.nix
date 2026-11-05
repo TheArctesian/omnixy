@@ -11,6 +11,10 @@
       url = "github:basecamp/omarchy/v4.0.6";
       flake = false;
     };
+
+    # Hermes Desktop (Install › AI › Hermes): its own Nix build. Not following
+    # our nixpkgs: its desktop build pins Electron headers for its own pin.
+    hermes-agent.url = "github:NousResearch/hermes-agent/v2026.9.7";
   };
 
   outputs =
@@ -18,6 +22,7 @@
       self,
       nixpkgs,
       omarchy,
+      hermes-agent,
     }:
     let
       system = "x86_64-linux";
@@ -106,6 +111,9 @@
         # Omarchy's openclaw package is the seed of a self-updating install in
         # ~/.openclaw, not nixpkgs' (store-bound) OpenClaw.
         openclaw = pkgs.callPackage ./packages/openclaw-seed.nix { };
+        hermes-desktop = pkgs.callPackage ./packages/hermes-desktop.nix {
+          hermesAgentPackages = hermes-agent.packages.${system};
+        };
         iso = self.nixosConfigurations.iso.config.system.build.isoImage;
         vm = self.nixosConfigurations.vm.config.system.build.vm;
         default = pkgs.omarchy;

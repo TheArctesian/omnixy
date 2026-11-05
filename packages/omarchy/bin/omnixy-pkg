@@ -34,6 +34,7 @@ declare -A MAP=(
   [perplexity]=omnixy#perplexity
   [grok-bot]=omnixy#grok-bot
   [openclaw]=omnixy#openclaw
+  [hermes-desktop]=omnixy#hermes-desktop
   [openai-codex-desktop]=chatgpt
   [t3code-bin]=t3code
   [winetricks]=winetricks
@@ -153,7 +154,7 @@ resolve() {
       echo '!hardware.graphics.enable32Bit = true;'
       return
       ;;
-    omarchy-* | oma* | hermes-desktop)
+    omarchy-* | oma*)
       echo '?'
       return
       ;;
