@@ -180,14 +180,9 @@ if ((ipu7_sensor)); then
   fi
 fi
 
-# --- Dell (dell-xps-touchpad-haptics.sh, speaker-tuning.sh) -------------------
+# --- Dell (dell-xps-touchpad-haptics.sh) ----------------------------------------
 if hw_match XPS && [[ -e $root/sys/bus/i2c/devices/i2c-VEN_06CB:00 ]]; then
   add dell.xpsHapticTouchpad.enable true "Dell XPS with the Synaptics haptic touchpad"
-fi
-if [[ -z $root ]] && command -v omarchy-audio-tuning >/dev/null; then
-  if tuning=$(OMARCHY_PATH=${OMARCHY_PATH:-/run/current-system/sw/share/omarchy} omarchy-audio-tuning match 2>/dev/null) && [[ -n $tuning ]]; then
-    add speakerTuning.enable true "speaker tuning available: ${tuning##*/}"
-  fi
 fi
 
 # --- TUXEDO / Slimbook (fix-tuxedo-backlight.sh, fix-yt6801-ethernet-adapter.sh)

@@ -195,8 +195,6 @@ in
 
     motorcomm.yt6801.enable = mkEnableOption "the out-of-tree Motorcomm YT6801 Ethernet driver (Slimbook Executive)";
 
-    speakerTuning.enable = mkEnableOption "the LV2 plugins Omarchy's speaker tunings need (Dell XPS 14/16 2026; see `omarchy-audio-tuning match`)";
-
     wirelessRegdom = mkOption {
       type = types.nullOr (types.strMatching "[A-Z]{2}");
       default = null;
@@ -431,15 +429,6 @@ in
     (mkIf hw.motorcomm.yt6801.enable {
       # fix-yt6801-ethernet-adapter.sh
       boot.extraModulePackages = [ config.boot.kernelPackages.yt6801 ];
-    })
-
-    (mkIf hw.speakerTuning.enable {
-      # speaker-tuning.sh. omarchy-audio-tuning looks for the limiter under
-      # /run/current-system/sw/lib/lv2, and its filter-chain client finds it
-      # through LV2_PATH.
-      environment.systemPackages = [ pkgs.lsp-plugins ];
-      environment.pathsToLink = [ "/lib/lv2" ];
-      environment.sessionVariables.LV2_PATH = mkDefault "/run/current-system/sw/lib/lv2";
     })
 
     (mkIf (hw.wirelessRegdom != null) {

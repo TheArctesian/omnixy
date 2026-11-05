@@ -110,7 +110,7 @@ omnixy.hardware = {
   nvidia.enable = true;        # proprietary driver, open modules (legacy = true for Maxwell-Volta)
   apple.t2.enable = true;      # plus nixos-hardware.nixosModules.apple-t2
   # surface, apple.spiKeyboard, broadcom.wl, intel.pantherLake, intel.ipu7,
-  # dell.xpsHapticTouchpad, tuxedo, motorcomm.yt6801, speakerTuning, wirelessRegdom
+  # dell.xpsHapticTouchpad, tuxedo, motorcomm.yt6801, wirelessRegdom
 };
 ```
 

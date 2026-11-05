@@ -52,7 +52,6 @@ at the top of `packages/omarchy/bin/omnixy-hardware-detect`.
 | `omnixy.hardware.dell.xpsHapticTouchpad.enable` | The omarchy-pkgs haptics daemon and the `dell-xps-touchpad-haptics` CLI that the menu calls |
 | `omnixy.hardware.tuxedo.enable` | `hardware.tuxedo-drivers`, with `clevo_xsm_wmi` blacklisted |
 | `omnixy.hardware.motorcomm.yt6801.enable` | Out-of-tree Motorcomm YT6801 Ethernet driver |
-| `omnixy.hardware.speakerTuning.enable` | `lsp-plugins`, linked into `/run/current-system/sw/lib/lv2`, for `omarchy-audio-tuning` |
 | `omnixy.hardware.wirelessRegdom` (`"GB"`) | `cfg80211 ieee80211_regdom=` |
 
 nixos-hardware profiles still help on top of these, for example
@@ -94,7 +93,7 @@ nixos-hardware profiles still help on top of these, for example
 | `vulkan.sh` | not needed | Mesa on NixOS ships every Vulkan driver (ANV, RADV, Asahi). NVIDIA's comes with the driver |
 | `fix-tuxedo-backlight.sh` | option `tuxedo.enable` | No orphaned `.ko` files to clean up on NixOS |
 | `fix-yt6801-ethernet-adapter.sh` | option `motorcomm.yt6801.enable` | |
-| `speaker-tuning.sh` | option `speakerTuning.enable` | The package also rewrites the script's `/usr/lib/lv2` check and the tuning unit's `/usr/bin/pipewire` |
+| `speaker-tuning.sh` | on by default | The base packages ship lsp-plugins' LV2 bundle (the limiter the tunings use) and `LV2_PATH`; the package also rewrites the script's `/usr/lib/lv2` check and the tuning unit's `/usr/bin/pipewire` |
 | `set-wireless-regdom.sh` | option `wirelessRegdom` | Upstream reads the timezone at install time. The detect script does the same |
 | `fix-synaptic-touchpad.sh` | not applicable | Upstream only runs `modprobe psmouse synaptics_intertouch=1` on the live system and does not persist it (see the script's comment). Nothing carries over to the installed system |
 | `bluetooth.sh` | `omnixy.features.bluetooth` | `modules/services.nix` |
