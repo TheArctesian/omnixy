@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Boot splash theme (declarative on OmniXY)
+# omarchy:hidden=true
+exec omarchy-plymouth-set

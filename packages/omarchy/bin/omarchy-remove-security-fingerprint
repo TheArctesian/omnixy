@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# omarchy:summary=Remove fingerprint authentication (declarative on OmniXY)
+
+cat <<'MSG'
+On OmniXY, fingerprint authentication is part of your NixOS configuration. Remove
+
+  services.fprintd.enable = true;
+
+then run omarchy-update. To delete enrolled prints first: fprintd-delete "$USER"
+MSG

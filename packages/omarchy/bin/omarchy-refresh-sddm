@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# omarchy:summary=No-op on OmniXY: the sddm configuration is declared by NixOS
+# omarchy:hidden=true
+#
+# Other Omarchy commands call this after resetting configs. On NixOS the boot
+# loader, Plymouth and SDDM theme come from the system configuration and are
+# rebuilt by 'omarchy-update', so there is nothing to refresh.
+exit 0
