@@ -76,7 +76,11 @@
         vm = mkSystem [ ./hosts/vm/configuration.nix ];
 
         # Live/installer ISO: `nix build .#iso`
-        iso = mkSystem [ ./hosts/iso/configuration.nix ];
+        # The rev lets omnixy-install pin installs to the ISO's own source.
+        iso = mkSystem [
+          ./hosts/iso/configuration.nix
+          { system.configurationRevision = self.rev or null; }
+        ];
       };
 
       packages.${system} = {
@@ -91,6 +95,7 @@
           omarchy-emacs
           tobi-try
           asdcontrol
+          omnixy-install
           omacalc
           omawrite
           omacut
@@ -113,6 +118,7 @@
       checks.${system} = {
         example = self.nixosConfigurations.example.config.system.build.toplevel;
         desktop = import ./tests/desktop.nix { inherit pkgs self; };
+        installer = import ./tests/installer.nix { inherit pkgs; };
       };
 
       templates.default = {

@@ -40,6 +40,26 @@ flake and can be rolled back.
 
 ## Install
 
+### From the ISO
+
+Build the live ISO (`nix build github:TheArctesian/omnixy#iso`), write it to a USB
+stick and boot it (UEFI). The desktop opens **Install OmniXY**, a guided installer
+in the style of Omarchy's (relaunch it from the app launcher, or run
+`omnixy-install`). It asks for keyboard, user name, password, full name, email,
+hostname, timezone, the disk to erase and whether to encrypt it, then:
+
+- partitions the disk with disko: a 1G EFI partition and btrfs (`@`, `@home`,
+  `@nix`, `@log`, zstd compression), optionally inside LUKS2 unlocked with your
+  password at boot (encrypted installs also log in automatically, as upstream);
+- writes `/etc/nixos` as a flake importing `github:TheArctesian/omnixy`, with your
+  answers in `configuration.nix` and the `nixos-generate-config` hardware file;
+- runs `nixos-install` (needs internet) and offers to reboot.
+
+`omnixy-install --dry-run` prints the generated files and the commands without
+touching a disk; `--help` lists the `OMNIXY_INSTALL_*` variables that preset answers.
+
+### Onto an existing NixOS
+
 On an existing NixOS install (UEFI, flakes enabled):
 
 ```bash
@@ -81,7 +101,7 @@ It boots into the desktop as `omnixy` (password `omnixy`). Or build it yourself:
 
 ```bash
 nix run github:TheArctesian/omnixy#vm   # throwaway VM, auto-logs in as omnixy/omnixy
-nix build github:TheArctesian/omnixy#iso  # live ISO, boots straight into the desktop
+nix build github:TheArctesian/omnixy#iso  # live ISO: the desktop plus the installer
 ```
 
 ## Day to day
@@ -115,10 +135,12 @@ To publish an ISO, see [docs/releasing.md](docs/releasing.md).
 flake.nix                  inputs (nixpkgs, omarchy@tag), outputs
 packages/omarchy/          the Omarchy package + NixOS replacement commands (bin/)
 packages/*.nix             ttfx, tensaku, fonts, sddm and plymouth themes
+packages/omnixy-install/   the ISO's guided installer
 modules/                   the NixOS module (options in default.nix)
 hosts/{example,vm,iso}/    example machine, test VM, live ISO
 templates/default/         `nix flake init -t` starter
 tests/desktop.nix          boots the desktop and screenshots it
+tests/installer.nix        shellchecks omnixy-install and checks its --dry-run output
 ```
 
 ## License

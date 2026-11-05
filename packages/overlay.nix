@@ -19,6 +19,7 @@ in
   omnixy-plymouth-theme = final.callPackage ./omnixy-plymouth-theme.nix {
     inherit omarchySrc omarchyVersion;
   };
+  omnixy-install = final.callPackage ./omnixy-install { };
   ttfx = final.callPackage ./ttfx.nix { };
   tensaku = final.callPackage ./tensaku.nix { };
   aether = final.callPackage ./aether.nix { };

@@ -1,0 +1,761 @@
+#!/usr/bin/env bash
+# omnixy-install: guided installer for the OmniXY live ISO.
+#
+# The NixOS take on Omarchy's ISO configurator: the same questions in the same
+# order (keyboard, account, identity, hostname, timezone, disk, encryption),
+# asked with gum. The answers become a disko layout, which partitions the disk,
+# and a system flake in /mnt/etc/nixos that imports OmniXY, which nixos-install
+# builds.
+#
+# Every answer can be given up front as an OMNIXY_INSTALL_* variable (see
+# --help), which skips its prompt. With --dry-run nothing is touched: the
+# generated files are written to a scratch directory and printed, together with
+# the commands a real run would execute.
+
+set -euo pipefail
+
+FLAKE_URL=${OMNIXY_INSTALL_FLAKE_URL:-github:TheArctesian/omnixy}
+NIXPKGS_URL=${OMNIXY_INSTALL_NIXPKGS_URL:-github:NixOS/nixpkgs/nixos-unstable}
+# Revisions the live ISO was built from (set by the package wrapper). Locking
+# the new system to them means most of its closure is already in the live
+# store, and OmniXY's own packages, which no binary cache carries, need no
+# rebuild.
+OMNIXY_REV=${OMNIXY_INSTALL_OMNIXY_REV:-}
+NIXPKGS_REV=${OMNIXY_INSTALL_NIXPKGS_REV:-}
+STATE_VERSION=${OMNIXY_INSTALL_STATE_VERSION:-26.05}
+LOGO=${OMNIXY_INSTALL_LOGO:-}
+ROOT=/mnt
+LOG=/tmp/omnixy-install.log
+
+dry_run=0
+assume_yes=0
+reboot_after=ask
+out_dir=""
+
+ACCENT="#845DF9"
+
+usage() {
+  cat <<'USAGE'
+Usage: omnixy-install [--dry-run] [--yes] [--out DIR] [--no-reboot]
+
+Guided OmniXY installer. Asks for keyboard, account, identity, hostname,
+timezone, target disk and encryption, partitions the disk with disko, writes a
+system flake to /mnt/etc/nixos and runs nixos-install.
+
+  --dry-run     Touch nothing: write the generated files to DIR (or a temp
+                directory), print them and the commands a real run would run.
+  --yes         Skip the confirmations (wipe, summary, reboot). Dangerous.
+  --out DIR     Where --dry-run writes the generated files.
+  --no-reboot   Do not offer to reboot at the end.
+  -h, --help    Show this help.
+
+Answers can be preset (their prompt is then skipped):
+
+  OMNIXY_INSTALL_KEYBOARD    layout label ("English (UK)") or console keymap ("uk")
+  OMNIXY_INSTALL_USERNAME    account name
+  OMNIXY_INSTALL_PASSWORD    password (also the disk passphrase when encrypting)
+  OMNIXY_INSTALL_FULL_NAME   git identity, may be empty
+  OMNIXY_INSTALL_EMAIL       git identity, may be empty
+  OMNIXY_INSTALL_HOSTNAME    host name, also the flake's nixosConfigurations name
+  OMNIXY_INSTALL_TIMEZONE    e.g. Europe/London
+  OMNIXY_INSTALL_DISK        whole disk to ERASE, e.g. /dev/nvme0n1
+  OMNIXY_INSTALL_ENCRYPT     yes or no (LUKS2 full-disk encryption)
+
+  OMNIXY_INSTALL_FLAKE_URL   OmniXY flake the new system follows
+                             (default github:TheArctesian/omnixy)
+USAGE
+}
+
+while (($#)); do
+  case "$1" in
+    --dry-run) dry_run=1 ;;
+    --yes | -y) assume_yes=1 ;;
+    --no-reboot) reboot_after=no ;;
+    --out)
+      out_dir=${2:?--out needs a directory}
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "omnixy-install: unknown option $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+# --- Presentation ----------------------------------------------------------
+
+interactive() { [[ -t 0 && -t 1 ]]; }
+
+show_logo() {
+  interactive && clear
+  if [[ -n $LOGO && -f $LOGO ]]; then
+    printf '\033[32m%s\033[0m\n\n' "$(<"$LOGO")"
+  fi
+}
+
+notice() {
+  if interactive; then
+    gum style --foreground 1 --padding "0 0 0 1" "$1"
+    sleep "${2:-1}"
+  else
+    echo "omnixy-install: $1" >&2
+  fi
+}
+
+step() { gum style --foreground "$ACCENT" --bold "● $*" 2>/dev/null || echo "● $*"; }
+
+die() {
+  echo "omnixy-install: $*" >&2
+  exit 1
+}
+
+# Presets win; otherwise a missing answer needs a terminal to ask on.
+preset() { [[ -n ${!1+x} ]]; }
+need_tty() { interactive || die "no terminal to ask on; set $1"; }
+
+confirm() {
+  ((assume_yes)) && return 0
+  interactive || die "confirmation needed ($1); pass --yes to run unattended"
+  gum confirm --default=false "$1"
+}
+
+# --- The form ----------------------------------------------------------------
+# Same fields, rules and keyboard list as upstream's install/provisioning/
+# setup-form.sh, with an XKB layout next to each console keymap since NixOS
+# sets both separately (Hyprland reads the XKB one from /etc/vconsole.conf).
+
+# label|console keymap|xkb layout|xkb variant
+KEYBOARDS='English (US)|us|us|
+English (UK)|uk|gb|
+English (US, Dvorak)|dvorak|us|dvorak
+English (US, Colemak)|colemak|us|colemak
+Azerbaijani|us|az|
+Belarusian|by|us,by|
+Belgian|be-latin1|be|
+Bulgarian|bg-cp1251|us,bg|
+Croatian|croat|hr|
+Czech|cz|cz|
+Danish|dk-latin1|dk|
+Dutch|nl|nl|
+Estonian|et|ee|
+Finnish|fi|fi|
+French|fr|fr|
+French (Canada)|cf|ca|
+French (Switzerland)|fr_CH|ch|fr
+Georgian|ge|us,ge|
+German|de|de|
+German (Switzerland)|de_CH-latin1|ch|
+Greek|gr|us,gr|
+Hebrew|il|us,il|
+Hungarian|hu|hu|
+Icelandic|is-latin1|is|
+Irish|ie|ie|
+Italian|it|it|
+Japanese|jp106|jp|
+Kazakh|kazakh|us,kz|
+Kyrgyz|kyrgyz|us,kg|
+Lao|us|us,la|
+Latvian|lv|lv|
+Lithuanian|lt|lt|
+Macedonian|mk-utf|us,mk|
+Norwegian|no-latin1|no|
+Polish|pl|pl|
+Portuguese|pt-latin1|pt|
+Portuguese (Brazil)|br-abnt2|br|
+Romanian|ro|ro|
+Russian|ru|us,ru|
+Serbian|sr-latin|rs|latin
+Slovak|sk-qwertz|sk|qwertz
+Slovenian|slovene|si|
+Spanish|es|es|
+Spanish (Latin American)|la-latin1|latam|
+Swedish|sv-latin1|se|
+Tajik|tj_alt-UTF8|us,tj|
+Turkish|trq|tr|
+Ukrainian|ua|us,ua|'
+
+USERNAME_PATTERN='^[a-z_][a-z0-9_-]*$'
+RESERVED_USERNAMES='^(root|bin|daemon|mail|ftp|http|nobody|nogroup|dbus|messagebus|sshd|nixbld[0-9]*|systemd-.*|tss|uuidd|git|avahi|cups|lp|polkituser|rtkit|qemu-libvirtd|pcscd|sddm|geoclue|colord|fwupd-refresh|docker|wheel|users)$'
+HOSTNAME_PATTERN='^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'
+
+keyboard_row() {
+  awk -F'|' -v k="$1" '$1 == k || $2 == k { print; exit }' <<<"$KEYBOARDS"
+}
+
+ask_keyboard() {
+  local choice row
+  if preset OMNIXY_INSTALL_KEYBOARD; then
+    choice=$OMNIXY_INSTALL_KEYBOARD
+  else
+    need_tty OMNIXY_INSTALL_KEYBOARD
+    choice=$(cut -d'|' -f1 <<<"$KEYBOARDS" |
+      gum choose --height 10 --selected "English (US)" --header "Select keyboard layout")
+  fi
+  row=$(keyboard_row "$choice")
+  [[ -n $row ]] || die "unknown keyboard layout: $choice"
+  IFS='|' read -r keyboard_label console_keymap xkb_layout xkb_variant <<<"$row"
+  # Non-Latin layouts get US alongside, toggled with Alt+Shift, so commands
+  # and passwords stay typeable.
+  xkb_options=""
+  if [[ $xkb_layout == us,* ]]; then
+    xkb_variant=",$xkb_variant"
+    xkb_options="grp:alt_shift_toggle"
+  fi
+  # Type the rest of the form in the layout the new system will use.
+  if ((!dry_run)); then
+    command -v hyprctl >/dev/null && hyprctl keyword input:kb_layout "${xkb_layout%%,*}" >/dev/null 2>&1 || true
+    [[ $(tty 2>/dev/null) == /dev/tty[0-9]* ]] && loadkeys "$console_keymap" >/dev/null 2>&1 || true
+  fi
+}
+
+valid_username() {
+  if ! [[ $1 =~ $USERNAME_PATTERN ]] || ((${#1} > 32)); then
+    notice "Username must be lowercase letters, digits, - or _ (up to 32)"
+  elif [[ $1 =~ $RESERVED_USERNAMES ]]; then
+    notice "Username is reserved for the system"
+  else
+    return 0
+  fi
+  return 1
+}
+
+ask_username() {
+  if preset OMNIXY_INSTALL_USERNAME; then
+    username=$OMNIXY_INSTALL_USERNAME
+    valid_username "$username" || exit 1
+    return 0
+  fi
+  need_tty OMNIXY_INSTALL_USERNAME
+  while true; do
+    username=$(gum input --placeholder "Alphanumeric without spaces (like dhh)" \
+      --prompt.foreground="$ACCENT" --prompt "Username> ")
+    valid_username "$username" && return 0
+  done
+}
+
+ask_password() {
+  local confirmation
+  if preset OMNIXY_INSTALL_PASSWORD; then
+    password=$OMNIXY_INSTALL_PASSWORD
+    [[ -n $password ]] || die "OMNIXY_INSTALL_PASSWORD is empty"
+    return 0
+  fi
+  need_tty OMNIXY_INSTALL_PASSWORD
+  while true; do
+    password=$(gum input --password --placeholder "Used for your account, and disk encryption when enabled" \
+      --prompt.foreground="$ACCENT" --prompt "Password> ")
+    confirmation=$(gum input --password --placeholder "Must match the password you just typed" \
+      --prompt.foreground="$ACCENT" --prompt "Confirm> ")
+    if [[ -z $password ]]; then
+      notice "Your password can't be blank!"
+    elif [[ $password != "$confirmation" ]]; then
+      notice "Passwords didn't match!"
+    else
+      return 0
+    fi
+  done
+}
+
+ask_identity() {
+  if preset OMNIXY_INSTALL_FULL_NAME; then
+    full_name=$OMNIXY_INSTALL_FULL_NAME
+  else
+    need_tty OMNIXY_INSTALL_FULL_NAME
+    full_name=$(gum input --placeholder "Used for git authentication (hit return to skip)" \
+      --prompt.foreground="$ACCENT" --prompt "Full name> ")
+  fi
+  if preset OMNIXY_INSTALL_EMAIL; then
+    email=$OMNIXY_INSTALL_EMAIL
+  else
+    need_tty OMNIXY_INSTALL_EMAIL
+    email=$(gum input --placeholder "Used for git authentication (hit return to skip)" \
+      --prompt.foreground="$ACCENT" --prompt "Email address> ")
+  fi
+}
+
+ask_hostname() {
+  if preset OMNIXY_INSTALL_HOSTNAME; then
+    hostname=${OMNIXY_INSTALL_HOSTNAME:-omnixy}
+    [[ $hostname =~ $HOSTNAME_PATTERN ]] || die "invalid hostname: $hostname"
+    return 0
+  fi
+  need_tty OMNIXY_INSTALL_HOSTNAME
+  while true; do
+    hostname=$(gum input --placeholder "Letters, digits, and dashes (or return for 'omnixy')" \
+      --prompt.foreground="$ACCENT" --prompt "Hostname> ")
+    hostname=${hostname:-omnixy}
+    [[ $hostname =~ $HOSTNAME_PATTERN ]] && return 0
+    notice "Hostname must be 1-63 letters, digits, or dashes, and cannot start or end with a dash"
+  done
+}
+
+list_timezones() {
+  timedatectl list-timezones 2>/dev/null ||
+    awk '!/^#/ { print $3 }' "${TZDIR:-/etc/zoneinfo}/zone1970.tab" | sort
+}
+
+ask_timezone() {
+  local guess=""
+  if preset OMNIXY_INSTALL_TIMEZONE; then
+    timezone=${OMNIXY_INSTALL_TIMEZONE:-UTC}
+  else
+    need_tty OMNIXY_INSTALL_TIMEZONE
+    # A fresh machine often has no network yet, so the geo guess may fail.
+    guess=$(timeout 5 tzupdate -p 2>/dev/null) || guess=""
+    if [[ -n $guess ]]; then
+      timezone=$(list_timezones | gum choose --height 10 --selected "$guess" --header "Timezone")
+    else
+      timezone=$(list_timezones | gum filter --height 10 --header "Timezone")
+    fi
+    timezone=${timezone:-UTC}
+  fi
+  if [[ $timezone != UTC ]] && ! list_timezones | grep -qxF "$timezone"; then
+    die "unknown timezone: $timezone"
+  fi
+}
+
+# Whole, writable disks, without the medium the live system booted from.
+list_disks() {
+  local live="" src name size type ro model
+  src=$(findmnt -nvo SOURCE /iso 2>/dev/null) || src=""
+  [[ -n $src ]] && live=$(lsblk -npo PKNAME "$src" 2>/dev/null | head -1)
+  [[ -z $live && -n $src ]] && live=$src
+  while read -r name size type ro model; do
+    [[ $type == disk && $ro == 0 && $name != "$live" && $name != /dev/zram* ]] || continue
+    printf '%s\t%s\t%b\n' "$name" "$size" "${model:-unknown model}"
+  done < <(lsblk -dnpr -o NAME,SIZE,TYPE,RO,MODEL 2>/dev/null)
+}
+
+disk_description() {
+  local size model
+  size=$(lsblk -dno SIZE "$1" 2>/dev/null | tr -d ' ') || size="?"
+  model=$(lsblk -dno MODEL "$1" 2>/dev/null) || model=""
+  printf '%s (%s, %s)' "$1" "${size:-?}" "${model:-unknown model}"
+}
+
+ask_disk() {
+  local disks choice
+  if preset OMNIXY_INSTALL_DISK; then
+    disk=$OMNIXY_INSTALL_DISK
+    [[ -n $disk ]] || die "OMNIXY_INSTALL_DISK is empty"
+  else
+    need_tty OMNIXY_INSTALL_DISK
+    disks=$(list_disks)
+    [[ -n $disks ]] || die "no installable disk found (lsblk shows no writable whole disk)"
+    choice=$(awk -F'\t' '{ printf "%-16s %8s  %s\n", $1, $2, $3 }' <<<"$disks" |
+      gum choose --header "Select install disk (everything on it will be erased)")
+    disk=${choice%% *}
+  fi
+  if ((!dry_run)); then
+    [[ -b $disk ]] || die "$disk is not a block device"
+    [[ $(lsblk -dno TYPE "$disk") == disk ]] || die "$disk is not a whole disk"
+  fi
+  disk_label=$(disk_description "$disk")
+}
+
+ask_encryption() {
+  local answer
+  if preset OMNIXY_INSTALL_ENCRYPT; then
+    answer=${OMNIXY_INSTALL_ENCRYPT,,}
+  else
+    need_tty OMNIXY_INSTALL_ENCRYPT
+    if gum confirm --default=true "Encrypt the disk? (LUKS, unlocked with your password at boot)"; then
+      answer=yes
+    else
+      answer=no
+    fi
+  fi
+  case $answer in
+    y | yes | 1 | true) encrypt=1 ;;
+    n | no | 0 | false | "") encrypt=0 ;;
+    *) die "OMNIXY_INSTALL_ENCRYPT must be yes or no" ;;
+  esac
+}
+
+# --- Generated files ---------------------------------------------------------
+
+# Nix string literal body: escape \, " and ${.
+nix_escape() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//\$\{/\\\$\{}
+  printf '%s' "$s"
+}
+
+# btrfs, as upstream Omarchy installs: zstd compression roughly halves /nix,
+# subvolumes keep /home and /nix apart from / for snapshots or a later
+# impermanence setup, and nixos-generate-config detects the layout (subvol=
+# options, the LUKS device) on its own. Rollback itself comes from NixOS
+# generations, so no snapper/limine-snapshots are needed.
+write_disko() {
+  local root_content btrfs
+  btrfs=$(
+    cat <<EOF
+{
+            type = "btrfs";
+            extraArgs = [ "-f" "-L" "nixos" ];
+            subvolumes = {
+              "@" = {
+                mountpoint = "/";
+                mountOptions = [ "compress=zstd" "noatime" ];
+              };
+              "@home" = {
+                mountpoint = "/home";
+                mountOptions = [ "compress=zstd" "noatime" ];
+              };
+              "@nix" = {
+                mountpoint = "/nix";
+                mountOptions = [ "compress=zstd" "noatime" ];
+              };
+              "@log" = {
+                mountpoint = "/var/log";
+                mountOptions = [ "compress=zstd" "noatime" ];
+              };
+            };
+          }
+EOF
+  )
+  if ((encrypt)); then
+    root_content=$(
+      cat <<EOF
+{
+            type = "luks";
+            name = "cryptroot";
+            passwordFile = "$luks_key";
+            settings.allowDiscards = true;
+            content = ${btrfs//$'\n'/$'\n'    };
+          }
+EOF
+    )
+  else
+    root_content=$btrfs
+  fi
+  cat >"$1" <<EOF
+# Written by omnixy-install and used once, to partition $disk.
+# Not imported by the system: hardware-configuration.nix describes the result.
+{
+  disko.devices.disk.main = {
+    type = "disk";
+    device = "$disk";
+    content = {
+      type = "gpt";
+      partitions = {
+        ESP = {
+          size = "1G";
+          type = "EF00";
+          content = {
+            type = "filesystem";
+            format = "vfat";
+            extraArgs = [ "-n" "BOOT" ];
+            mountpoint = "/boot";
+            mountOptions = [ "umask=0077" ];
+          };
+        };
+        root = {
+          size = "100%";
+          content = $root_content;
+        };
+      };
+    };
+  };
+}
+EOF
+}
+
+write_flake() {
+  cat >"$1" <<EOF
+{
+  description = "$hostname: NixOS running OmniXY";
+
+  inputs = {
+    nixpkgs.url = "$NIXPKGS_URL";
+    omnixy = {
+      url = "$FLAKE_URL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs =
+    { nixpkgs, omnixy, ... }:
+    {
+      # Rebuild with: sudo nixos-rebuild switch --flake /etc/nixos#$hostname
+      # (or just \`omarchy-update\` from the desktop)
+      nixosConfigurations."$hostname" = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          omnixy.nixosModules.default
+          ./configuration.nix
+        ];
+      };
+    };
+}
+EOF
+}
+
+write_configuration() {
+  local fs mounts="" encryption=""
+  for fs in / /home /nix /var/log; do
+    mounts+="  fileSystems.\"$fs\".options = [ \"compress=zstd\" \"noatime\" ];"$'\n'
+  done
+  if ((encrypt)); then
+    encryption=$(
+      cat <<'EOF'
+
+  # Full-disk encryption: the LUKS device itself is in
+  # hardware-configuration.nix; the passphrase prompt is the Plymouth splash.
+  boot.initrd.luks.devices.cryptroot.allowDiscards = true;
+EOF
+    )
+  fi
+  cat >"$1" <<EOF
+# Written by omnixy-install. This is yours to edit; apply changes with
+# \`omarchy-update\` or \`sudo nixos-rebuild switch --flake /etc/nixos#$hostname\`.
+# Every OmniXY option: https://github.com/TheArctesian/omnixy#install
+{ ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  omnixy = {
+    enable = true;
+    user = "$(nix_escape "$username")";
+    fullName = "$(nix_escape "$full_name")";
+    email = "$(nix_escape "$email")";
+    theme = "Tokyo Night";
+$( ((encrypt)) && printf '    # The disk passphrase already authenticates you, as upstream.\n    autoLogin = true;\n')
+    # preinstalls.enable = false; # skip LibreOffice, OBS, Kdenlive, ...
+    # features.docker = false;
+  };
+
+  # Only applied when the account is created; change it later with \`passwd\`.
+  users.users."$(nix_escape "$username")".initialHashedPassword = "$password_hash";
+
+  networking.hostName = "$hostname"; # must match the name in flake.nix
+
+  # time.timeZone is left unset so the Omarchy timezone menu (timedatectl) can
+  # change it; the installer pointed /etc/localtime at $timezone.
+  # Uncomment to pin it declaratively instead:
+  # time.timeZone = "$timezone";
+
+  # $keyboard_label
+  console.keyMap = "$console_keymap";
+  services.xserver.xkb = {
+    layout = "$xkb_layout";
+    variant = "$xkb_variant";
+    options = "$xkb_options";
+  };
+  # i18n.defaultLocale = "en_US.UTF-8";
+
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.systemd-boot.configurationLimit = 10;
+  boot.loader.efi.canTouchEfiVariables = true;
+
+  # btrfs subvolumes from the installer (subvol= is in hardware-configuration.nix).
+$mounts  services.btrfs.autoScrub.enable = true;
+$encryption
+
+  system.stateVersion = "$STATE_VERSION"; # don't change after install
+}
+EOF
+}
+
+# Stand-in for --dry-run, where nothing is mounted: the live machine's
+# hardware detection plus the filesystems the disko layout above creates.
+write_placeholder_hardware() {
+  local detected root_dev=/dev/disk/by-label/nixos
+  detected=$(nixos-generate-config --show-hardware-config --no-filesystems 2>/dev/null) || detected=""
+  if [[ $(tail -n 1 <<<"$detected") != "}" ]]; then
+    detected='{ lib, modulesPath, ... }:
+{
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+  nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+}'
+  fi
+  {
+    cat <<'EOF'
+# DRY RUN placeholder: this machine's hardware detection plus the filesystems
+# the disko layout creates. A real install writes the output of
+# `nixos-generate-config --root /mnt --show-hardware-config` instead.
+EOF
+    sed '$d' <<<"$detected"
+    echo
+    if ((encrypt)); then
+      echo '  boot.initrd.luks.devices."cryptroot".device = "/dev/disk/by-partlabel/disk-main-root";'
+    fi
+    cat <<EOF
+  fileSystems."/" = { device = "$root_dev"; fsType = "btrfs"; options = [ "subvol=@" ]; };
+  fileSystems."/home" = { device = "$root_dev"; fsType = "btrfs"; options = [ "subvol=@home" ]; };
+  fileSystems."/nix" = { device = "$root_dev"; fsType = "btrfs"; options = [ "subvol=@nix" ]; };
+  fileSystems."/var/log" = { device = "$root_dev"; fsType = "btrfs"; options = [ "subvol=@log" ]; };
+  fileSystems."/boot" = { device = "/dev/disk/by-label/BOOT"; fsType = "vfat"; options = [ "umask=0077" ]; };
+}
+EOF
+  } >"$1"
+}
+
+# --- Running -------------------------------------------------------------------
+
+# Privileged commands. sudo resets the environment, so pass PATH through.
+as_root() {
+  if ((EUID == 0)); then
+    "$@"
+  else
+    # disko's nix-build finds <nixpkgs> through NIX_PATH.
+    sudo env PATH="$PATH" ${NIX_PATH:+NIX_PATH="$NIX_PATH"} "$@"
+  fi
+}
+
+# Print in --dry-run, otherwise run as root.
+run() {
+  printf '+ %s\n' "$*"
+  ((dry_run)) || as_root "$@"
+}
+
+ensure_network() {
+  until curl -fsS --max-time 5 -o /dev/null https://cache.nixos.org/nix-cache-info; do
+    interactive || die "no internet connection (needed to fetch the OmniXY flake)"
+    notice "No internet connection. nixos-install needs one to fetch OmniXY." 0
+    if gum confirm "Open the network manager (nmtui) to connect?"; then
+      nmtui || true
+    else
+      die "no internet connection"
+    fi
+  done
+}
+
+lock_flake() {
+  local dir=$1 args=()
+  [[ -n $OMNIXY_REV && $OMNIXY_REV != *dirty* ]] && args+=(--override-input omnixy "$FLAKE_URL/$OMNIXY_REV")
+  [[ -n $NIXPKGS_REV ]] && args+=(--override-input nixpkgs "github:NixOS/nixpkgs/$NIXPKGS_REV")
+  if ((${#args[@]})); then
+    run nix flake lock "$dir" "${args[@]}" && return 0
+    notice "Could not pin to the live system's revisions; locking to the latest instead" 2
+  fi
+  run nix flake lock "$dir"
+}
+
+summary() {
+  gum style --border rounded --border-foreground "$ACCENT" --padding "1 2" \
+    "Keyboard   $keyboard_label" \
+    "User       $username${full_name:+ ($full_name)}${email:+ <$email>}" \
+    "Hostname   $hostname" \
+    "Timezone   $timezone" \
+    "Disk       $disk_label" \
+    "Encryption $( ((encrypt)) && echo "LUKS2" || echo "none")" \
+    "Layout     1G EFI (/boot) + btrfs (@ @home @nix @log, zstd)" 2>/dev/null ||
+    printf '%s\n' "keyboard=$keyboard_label user=$username hostname=$hostname timezone=$timezone disk=$disk encrypt=$encrypt"
+}
+
+# gum exits non-zero on Esc and Ctrl+C, which (under set -e) ends the run.
+# Before the disk is touched that is a clean cancel.
+touched_disk=0
+on_exit() {
+  local status=$?
+  if ((status != 0)); then
+    if ((touched_disk)); then
+      printf '\n\033[31mInstallation failed.\033[0m Log: %s\n' "$LOG" >&2
+    else
+      printf '\nCancelled: nothing was changed.\n' >&2
+    fi
+  fi
+  if [[ ${OMNIXY_INSTALL_PAUSE:-} == 1 ]] && interactive; then
+    printf 'Press any key to close...'
+    read -rsn 1 || true
+  fi
+}
+
+main() {
+  trap on_exit EXIT
+  show_logo
+
+  if ((!dry_run)); then
+    [[ -d /sys/firmware/efi ]] || die "this machine booted without UEFI; OmniXY installs with systemd-boot and needs UEFI"
+  fi
+
+  ask_keyboard
+  ask_username
+  ask_password
+  ask_identity
+  ask_hostname
+  ask_timezone
+  ask_disk
+  ask_encryption
+
+  password_hash=$(openssl passwd -6 -stdin <<<"$password")
+
+  if ((dry_run)); then
+    work=${out_dir:-$(mktemp -d -t omnixy-install.XXXXXX)}
+    mkdir -p "$work"
+  else
+    work=$(mktemp -d -t omnixy-install.XXXXXX)
+  fi
+  luks_key=/tmp/omnixy-luks.key
+  mkdir -p "$work/etc-nixos"
+  write_disko "$work/disko.nix"
+  write_flake "$work/etc-nixos/flake.nix"
+  write_configuration "$work/etc-nixos/configuration.nix"
+
+  if interactive; then show_logo; fi
+  summary
+  echo
+  confirm "Erase $disk_label and install OmniXY?" || exit 1
+
+  if ((dry_run)); then
+    write_placeholder_hardware "$work/etc-nixos/hardware-configuration.nix"
+    local f
+    for f in disko.nix etc-nixos/flake.nix etc-nixos/configuration.nix etc-nixos/hardware-configuration.nix; do
+      printf '\n===== %s =====\n' "$f"
+      cat "$work/$f"
+    done
+    printf '\n===== commands =====\n'
+  else
+    ensure_network
+    # Log the install; keep the terminal on fds 3/4 for the final prompt.
+    exec 3>&1 4>&2
+    exec > >(tee -a "$LOG") 2>&1
+  fi
+
+  ((dry_run)) || touched_disk=1
+  step "Partitioning $disk"
+  if ((encrypt)); then
+    printf '+ write the disk passphrase to %s (root, 0600)\n' "$luks_key"
+    ((dry_run)) || printf '%s' "$password" | as_root install -m 0600 /dev/stdin "$luks_key"
+  fi
+  run disko --mode destroy,format,mount --yes-wipe-all-disks --root-mountpoint "$ROOT" "$work/disko.nix"
+  ((encrypt)) && run rm -f "$luks_key"
+
+  step "Writing $ROOT/etc/nixos"
+  if ((dry_run)); then
+    printf '+ nixos-generate-config --root %s --show-hardware-config > %s\n' "$ROOT" "$ROOT/etc/nixos/hardware-configuration.nix"
+  else
+    as_root nixos-generate-config --root "$ROOT" --show-hardware-config >"$work/etc-nixos/hardware-configuration.nix"
+  fi
+  run install -d -m 0755 "$ROOT/etc/nixos"
+  run install -m 0644 -t "$ROOT/etc/nixos" "$work/etc-nixos/flake.nix" "$work/etc-nixos/configuration.nix" "$work/etc-nixos/hardware-configuration.nix"
+  lock_flake "$ROOT/etc/nixos"
+
+  step "Installing OmniXY (this takes a while)"
+  run nixos-install --root "$ROOT" --flake "$ROOT/etc/nixos#$hostname" --no-root-passwd
+  run ln -sfn "/etc/zoneinfo/$timezone" "$ROOT/etc/localtime"
+
+  if ((dry_run)); then
+    printf '\nDry run: nothing was changed. Generated files are in %s\n' "$work"
+    return 0
+  fi
+
+  exec 1>&3 2>&4
+  step "OmniXY is installed"
+  [[ $reboot_after == no ]] && return 0
+  if confirm "Reboot into OmniXY now?"; then
+    sync
+    as_root systemctl reboot
+  fi
+}
+
+main

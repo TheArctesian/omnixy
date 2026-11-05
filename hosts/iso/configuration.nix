@@ -1,11 +1,19 @@
 # Live ISO: boots straight into the OmniXY desktop as `omnixy` (password
-# `omnixy`) with the NixOS installer tools available.
+# `omnixy`) and opens the guided installer, omnixy-install, in a terminal
+# (relaunch it from the app launcher as "Install OmniXY").
 {
+  config,
   lib,
   modulesPath,
   pkgs,
   ...
 }:
+let
+  installer = pkgs.omnixy-install.override {
+    omnixyRev = config.system.configurationRevision;
+    nixpkgsRev = config.system.nixos.revision;
+  };
+in
 {
   imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-graphical-base.nix") ];
 
@@ -34,6 +42,7 @@
   # The full preinstalls (LibreOffice, OBS, Kdenlive, ...) would add GBs;
   # Omarchy's own apps are small, so the live session has them.
   environment.systemPackages = with pkgs; [
+    installer
     gparted
     disko
     aether
@@ -42,4 +51,7 @@
     omawrite
     omazed
   ];
+  # Greet the live session with the installer, as upstream's ISO does.
+  environment.etc."xdg/autostart/omnixy-install.desktop".source =
+    "${installer}/share/applications/omnixy-install.desktop";
 }
