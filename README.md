@@ -90,8 +90,32 @@ omnixy = {
   # preinstalls.enable = false; # skip LibreOffice, OBS, Kdenlive, Obsidian, ...
   # features = { docker = false; printing = false; plymouth = false; };
   # flake.path = "/home/alice/nixos";  # what omarchy-update rebuilds
+  # hardware.nvidia.enable = true;     # see `omnixy-hardware-detect`
 };
 ```
+
+### Hardware
+
+Upstream's hardware quirks (`install/hardware/`) that check the machine at
+runtime are always on: the Apple Wi-Fi handshake and NVMe suspend fixes,
+Apple-style F-keys, Intel BE200 Wi-Fi 7, the ASUS and Framework udev rules,
+thermald and intel-lpmd. Set `omnixy.hardware.quirks.enable = false` to turn
+them off. Quirks that need a build-time choice are options. Run
+`omnixy-hardware-detect` to see which ones this machine needs:
+
+```nix
+omnixy.hardware = {
+  asus.enable = true;          # ROG: asusd/asusctl, keyboard lighting follows the theme
+  framework.enable = true;     # Framework 16: qmk_hid keyboard lighting
+  nvidia.enable = true;        # proprietary driver, open modules (legacy = true for Maxwell-Volta)
+  apple.t2.enable = true;      # plus nixos-hardware.nixosModules.apple-t2
+  # surface, apple.spiKeyboard, broadcom.wl, intel.pantherLake, intel.ipu7,
+  # dell.xpsHapticTouchpad, tuxedo, motorcomm.yt6801, speakerTuning, wirelessRegdom
+};
+```
+
+[docs/hardware.md](docs/hardware.md) maps every upstream hardware script to its
+OmniXY equivalent.
 
 ### Try it first
 

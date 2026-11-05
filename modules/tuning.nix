@@ -118,9 +118,6 @@ in
     # plocate-updatedb.service.d/ac-only.conf
     systemd.services.update-locatedb.unitConfig.ConditionACPower = true;
 
-    # install/hardware/intel/thermald.sh: Intel machines only.
-    services.thermald.enable = lib.mkDefault config.hardware.cpu.intel.updateMicrocode;
-
     environment.etc = {
       "gnupg/dirmngr.conf".source = "${etcSrc}/gnupg/dirmngr.conf";
       "xdg/kitty/kitty.conf".source = "${etcSrc}/xdg/kitty/kitty.conf";

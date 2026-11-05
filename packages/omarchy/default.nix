@@ -129,8 +129,9 @@ stdenvNoCC.mkDerivation {
       $share/bin/omarchy-cmd-browser-handoff
 
     # /usr/share data that lives elsewhere on NixOS.
-    grep -rlIZ -E '/usr/share/(icons|pixmaps|sounds|plymouth|zoneinfo|vulkan|libretro)|/usr/lib/libretro' $share/bin | xargs -0 -r sed -i -E \
+    grep -rlIZ -E '/usr/share/(icons|pixmaps|sounds|plymouth|zoneinfo|vulkan|libretro)|/usr/lib/(libretro|lv2)' $share/bin | xargs -0 -r sed -i -E \
       -e 's#/usr/share/vulkan/#/run/opengl-driver/share/vulkan/#g' \
+      -e 's#/usr/lib/lv2/#/run/current-system/sw/lib/lv2/#g' \
       -e 's#/usr/share/zoneinfo/#/etc/zoneinfo/#g' \
       -e 's#/usr/lib/libretro#$HOME/.nix-profile/lib/retroarch/cores#g' \
       -e 's#/usr/share/libretro#$HOME/.nix-profile/share/libretro#g' \
@@ -235,6 +236,9 @@ stdenvNoCC.mkDerivation {
     cp -r $share/default/systemd/user/. $out/lib/systemd/user/
     sed -i -e 's|/usr/bin/systemctl|/run/current-system/systemd/bin/systemctl|g' \
       -e 's|/usr/bin/|/run/current-system/sw/bin/|g' $out/lib/systemd/user/*.service
+    # Units that scripts copy into ~/.config/systemd/user (omarchy-audio-tuning).
+    sed -i -e 's|/usr/bin/systemctl|/run/current-system/systemd/bin/systemctl|g' \
+      -e 's|/usr/bin/|/run/current-system/sw/bin/|g' $share/default/systemd/user/*.service
     cp $share/default/xdg-terminal-exec/*.list $out/share/xdg-terminal-exec/
     cat > $out/share/wayland-sessions/omnixy.desktop <<EOF
     [Desktop Entry]

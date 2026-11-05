@@ -51,7 +51,7 @@ This rewrite was done overnight on branch `rewrite-v4`. The old tree was replace
 ## Still open
 
 1. ~~Omarchy's own apps are not packaged~~ Done in a follow-up: omacalc, omacut, omawrite, aether, omazed and omarchy-nvim are in `packages/` (see [differences.md](docs/differences.md#omarchys-own-apps)).
-2. **Hardware quirks** from `install/hardware/` (T2 Macs, Surface, ASUS, Framework, NVIDIA): use nixos-hardware instead. They are not mirrored.
+2. **Hardware quirks** from `install/hardware/` are in `modules/hardware.nix`. The runtime-gated ones are on by default, and the rest are `omnixy.hardware.*` options; `omnixy-hardware-detect` prints them. The T2 and Surface kernels still come from nixos-hardware, and t2fanrd is not packaged. See docs/hardware.md.
 3. **The ISO is a live desktop and has no guided installer.** You install with `nixos-install`/disko and the template. An Omarchy-style guided installer would be a separate project.
 4. **Not tested on real hardware.** The VM test uses software rendering. Real-GPU checks are still needed for Plymouth, SDDM theme rendering, suspend/lock and fingerprint.
 5. **The `omnixy-pkg` name map is curated, not exhaustive.** Unknown Arch names fall through to the same nixpkgs attribute name. Check with `omnixy-pkg resolve <name>`.
