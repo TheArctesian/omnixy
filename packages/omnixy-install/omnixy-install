@@ -712,9 +712,9 @@ on_exit() {
   fi
 }
 
-# The install takes longer than the live session's idle timeouts: without this
-# hypridle locks the screen (behind the live password) and blanks it midway.
-# The holder exits with the installer, however that ends.
+# Keep logind from suspending (idle action, lid switch) mid-install. The
+# shell's own idle lock/screensaver ignores logind; the live ISO starts in
+# "stay awake" for that. The holder exits with the installer, however it ends.
 inhibit_idle() {
   command -v systemd-inhibit >/dev/null || return 0
   systemd-inhibit --what=idle:sleep:handle-lid-switch --who=omnixy-install \
@@ -802,8 +802,9 @@ main() {
     return 0
   fi
 
-  step "OmniXY is installed"
   exec 1>&3 2>&4
+  echo "● OmniXY is installed" >>"$LOG"
+  step "OmniXY is installed"
   [[ $reboot_after == no ]] && return 0
   if confirm "Reboot into OmniXY now?"; then
     sync
