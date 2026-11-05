@@ -14,12 +14,17 @@
 
 set -euo pipefail
 
-FLAKE_URL=${OMNIXY_INSTALL_FLAKE_URL:-github:TheArctesian/omnixy}
+DEFAULT_FLAKE_URL=github:TheArctesian/omnixy
+FLAKE_URL=${OMNIXY_INSTALL_FLAKE_URL:-$DEFAULT_FLAKE_URL}
 NIXPKGS_URL=${OMNIXY_INSTALL_NIXPKGS_URL:-github:NixOS/nixpkgs/nixos-unstable}
 # Revisions the live ISO was built from (set by the package wrapper). Locking
 # the new system to them means most of its closure is already in the live
 # store, and OmniXY's own packages, which no binary cache carries, need no
-# rebuild.
+# rebuild. OMNIXY_SOURCE is the ISO's own OmniXY source in the live store:
+# locking to it works even when the ISO was built from a revision that is not
+# on GitHub (or from a dirty tree); `omarchy-update` (nix flake update) moves
+# the lock back to FLAKE_URL.
+OMNIXY_SOURCE=${OMNIXY_INSTALL_OMNIXY_SOURCE:-}
 OMNIXY_REV=${OMNIXY_INSTALL_OMNIXY_REV:-}
 NIXPKGS_REV=${OMNIXY_INSTALL_NIXPKGS_REV:-}
 STATE_VERSION=${OMNIXY_INSTALL_STATE_VERSION:-26.05}
@@ -315,9 +320,38 @@ ask_timezone() {
     fi
     timezone=${timezone:-UTC}
   fi
-  if [[ $timezone != UTC ]] && ! list_timezones | grep -qxF "$timezone"; then
+  # Not `list_timezones | grep -q`: under pipefail, grep quitting early can
+  # SIGPIPE the lister and reject a valid zone.
+  if [[ $timezone != UTC ]] && ! grep -qxF "$timezone" <<<"$(list_timezones)"; then
     die "unknown timezone: $timezone"
   fi
+}
+
+# omnixy.hardware for this machine, from omnixy-hardware-detect (always a Nix
+# attrset). The detector derives the wireless regulatory domain from the live
+# system's timezone, so that one is redone from the timezone chosen above.
+detect_hardware() {
+  local detected country="" body=""
+  detected=$(omnixy-hardware-detect --nix 2>/dev/null) || detected=""
+  if [[ $detected == "{"*"}" && $detected != "{ }" ]]; then
+    body=$(sed -e '1d' -e '$d' <<<"$detected" | grep -v '^ *wirelessRegdom = ') || body=""
+  fi
+  if [[ $timezone != UTC ]]; then
+    country=$(awk -F'\t' -v tz="$timezone" '!/^#/ && $3 == tz { print $1; exit }' \
+      "${TZDIR:-/etc/zoneinfo}/zone.tab" 2>/dev/null) || country=""
+    [[ $country =~ ^[A-Z]{2}$ ]] || country=""
+  fi
+  if [[ -n $country ]]; then
+    body="  wirelessRegdom = \"$country\"; # from timezone $timezone${body:+$'\n'$body}"
+  fi
+  if [[ -n $body ]]; then
+    hardware_nix="{"$'\n'"$body"$'\n'"}"
+  else
+    hardware_nix="{ }"
+  fi
+  # Option paths, for the summary.
+  hardware_summary=$(sed -n 's/^ *\([A-Za-z0-9_.]*\) = .*/\1/p' <<<"$body" | paste -sd, - | sed 's/,/, /g')
+  hardware_summary=${hardware_summary:-none needed}
 }
 
 # Whole, writable disks, without the medium the live system booted from.
@@ -528,6 +562,9 @@ EOF
     fullName = "$(nix_escape "$full_name")";
     email = "$(nix_escape "$email")";
     theme = "Tokyo Night";
+    # From omnixy-hardware-detect; run \`omnixy-hardware-detect --nix\` again
+    # after changing hardware.
+    hardware = ${hardware_nix//$'\n'/$'\n'    };
 $( ((encrypt)) && printf '    # The disk passphrase already authenticates you, as upstream.\n    autoLogin = true;\n')
     # preinstalls.enable = false; # skip LibreOffice, OBS, Kdenlive, ...
     # features.docker = false;
@@ -631,7 +668,13 @@ ensure_network() {
 
 lock_flake() {
   local dir=$1 args=()
-  [[ -n $OMNIXY_REV && $OMNIXY_REV != *dirty* ]] && args+=(--override-input omnixy "$FLAKE_URL/$OMNIXY_REV")
+  # The ISO's source and rev only describe the default flake, not a fork.
+  if [[ $FLAKE_URL == "$DEFAULT_FLAKE_URL" && -n $OMNIXY_SOURCE ]] &&
+    { ((dry_run)) || [[ -f $OMNIXY_SOURCE/flake.nix ]]; }; then
+    args+=(--override-input omnixy "path:$OMNIXY_SOURCE")
+  elif [[ $FLAKE_URL == "$DEFAULT_FLAKE_URL" && -n $OMNIXY_REV && $OMNIXY_REV != *dirty* ]]; then
+    args+=(--override-input omnixy "$FLAKE_URL/$OMNIXY_REV")
+  fi
   [[ -n $NIXPKGS_REV ]] && args+=(--override-input nixpkgs "github:NixOS/nixpkgs/$NIXPKGS_REV")
   if ((${#args[@]})); then
     run nix flake lock "$dir" "${args[@]}" && return 0
@@ -647,6 +690,7 @@ summary() {
     "Hostname   $hostname" \
     "Timezone   $timezone" \
     "Disk       $disk_label" \
+    "Hardware   $hardware_summary" \
     "Encryption $( ((encrypt)) && echo "LUKS2" || echo "none")" \
     "Layout     1G EFI (/boot) + btrfs (@ @home @nix @log, zstd)" 2>/dev/null ||
     printf '%s\n' "keyboard=$keyboard_label user=$username hostname=$hostname timezone=$timezone disk=$disk encrypt=$encrypt"
@@ -686,6 +730,7 @@ main() {
   ask_timezone
   ask_disk
   ask_encryption
+  detect_hardware
 
   password_hash=$(openssl passwd -6 -stdin <<<"$password")
 

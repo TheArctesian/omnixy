@@ -1,8 +1,9 @@
 # omnixy-install: the guided installer on the live ISO (see ./omnixy-install).
 #
-# omnixyRev/nixpkgsRev are the revisions the ISO was built from; the installer
-# locks the new system's flake to them so its closure mostly comes from the
-# live store instead of being downloaded or rebuilt.
+# omnixySource is the OmniXY source the ISO was built from, omnixyRev/
+# nixpkgsRev the revisions; the installer locks the new system's flake to them
+# so its closure mostly comes from the live store instead of being downloaded
+# or rebuilt.
 {
   lib,
   stdenvNoCC,
@@ -19,6 +20,7 @@
   openssl,
   tzupdate,
   util-linux,
+  omnixySource ? null,
   omnixyRev ? null,
   nixpkgsRev ? null,
   stateVersion ? lib.trivial.release,
@@ -76,6 +78,7 @@ stdenvNoCC.mkDerivation {
       } \
       --set-default OMNIXY_INSTALL_LOGO $out/share/omnixy-install/logo.txt \
       --set-default OMNIXY_INSTALL_STATE_VERSION ${stateVersion} \
+      ${lib.optionalString (omnixySource != null) "--set-default OMNIXY_INSTALL_OMNIXY_SOURCE ${omnixySource}"} \
       ${lib.optionalString (omnixyRev != null) "--set-default OMNIXY_INSTALL_OMNIXY_REV ${omnixyRev}"} \
       ${lib.optionalString (
         nixpkgsRev != null

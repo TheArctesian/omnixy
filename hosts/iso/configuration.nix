@@ -10,6 +10,9 @@
 }:
 let
   installer = pkgs.omnixy-install.override {
+    # The OmniXY source this ISO was built from (already in its store, as the
+    # `omnixy` registry entry).
+    omnixySource = config.nix.registry.omnixy.flake.outPath;
     omnixyRev = config.system.configurationRevision;
     nixpkgsRev = config.system.nixos.revision;
   };
