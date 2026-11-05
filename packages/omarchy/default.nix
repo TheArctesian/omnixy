@@ -157,6 +157,27 @@ stdenvNoCC.mkDerivation {
     # LV2 plugins live in the system profile (NixOS sets LV2_PATH to it).
     sed -i 's#/usr/lib/lv2/#/run/current-system/sw/lib/lv2/#g' $share/bin/omarchy-audio-tuning
 
+    # Lutris: upstream repoints /usr/bin/lutris' shebang at the system
+    # python (so mise's can't win); nixpkgs' lutris is already wrapped.
+    sed -i '/^sudo sed .*lutris$/d' $share/bin/omarchy-install-gaming-lutris
+    # voxtype writes its unit with the running binary's store path, which
+    # an update or GC removes; point it at the profile's `voxtype` instead.
+    sed -i 's#^\(\s*\)voxtype setup systemd$#&\n\1sed -i "s|^ExecStart=.* daemon$|ExecStart=$(command -v voxtype) daemon|" ~/.config/systemd/user/voxtype.service\n\1systemctl --user daemon-reload \&\& systemctl --user try-restart voxtype.service#' \
+      $share/bin/omarchy-voxtype-install
+
+    # Firefox-based browsers read system policies from /etc/<app>/policies
+    # (nixpkgs' builds don't read a distribution/ dir under /usr or /opt).
+    sed -i -e 's#browser_policy_setup_firefox_distribution /usr/lib/firefox/distribution#browser_policy_setup_firefox_distribution /etc/firefox/policies#' \
+      -e 's#browser_policy_setup_firefox_distribution /opt/zen-browser/distribution#browser_policy_setup_firefox_distribution /etc/zen/policies#' \
+      $share/bin/omarchy-install-browser
+    sed -i -e 's#^  /usr/lib/firefox/distribution$#  /etc/firefox/policies#' \
+      -e 's#^  /opt/zen-browser/distribution$#  /etc/zen/policies#' \
+      -e 's#^  /etc/brave/policies$#&\n  /etc/firefox\n  /etc/zen#' \
+      $share/install/helpers/browser-policy.sh
+    # ONCE's background unit comes from omnixy.features.once, enabled already.
+    sed -i '/^sudo systemctl enable --now once-background.service$/d' $share/bin/omarchy-install-service-once
+    sed -i 's#^omarchy-pkg-add once-bin$#omarchy-pkg-add once-bin || exit 1#' $share/bin/omarchy-install-service-once
+
     # Debug logs list nix packages instead of pacman's.
     sed -i -E \
       -e 's#\$\(pacman -Q omarchy-dev .*echo "unknown"\)#$(omarchy-version)#' \

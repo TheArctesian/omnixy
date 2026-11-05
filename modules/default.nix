@@ -104,6 +104,7 @@ in
       firewall = mkEnableOption "the firewall (deny inbound except LocalSend)" // {
         default = true;
       };
+      once = mkEnableOption "ONCE and its background service (Install › Service › ONCE; needs Docker)";
       nordvpn = mkEnableOption "the NordVPN daemon, with the user in the nordvpn group (Install › Service › NordVPN)";
     };
   };

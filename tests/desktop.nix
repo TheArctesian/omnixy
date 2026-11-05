@@ -32,6 +32,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.omacalc
         pkgs.omawrite
+        pkgs.pamtester
       ];
 
       virtualisation = {
@@ -182,6 +183,33 @@ pkgs.testers.runNixOSTest {
         wait_for_window("omawrite")
         machine.sleep(10)
         machine.screenshot("06-omawrite")
+
+    with subtest("faillock"):
+        # increase-lockout-limit.sh: 10 wrong passwords lock the account for
+        # 120 s; the lock screen's PAM stack is one that enforces it.
+        pt = "pamtester omarchy-lock-password alice authenticate"
+        faillock = "${pkgs.linux-pam}/bin/faillock --user alice"
+        machine.succeed(f"echo alice | {pt}")
+        for _ in range(10):
+            machine.fail(f"echo wrong | {pt}")
+        machine.fail(f"echo alice | {pt}")
+        print(machine.succeed(faillock))
+        machine.succeed(f"{faillock} --reset")
+        machine.succeed(f"echo alice | {pt}")
+        # sudo uses the same rules, and still authenticates.
+        machine.succeed("grep -q 'pam_faillock.so.*authfail' /etc/pam.d/sudo")
+        machine.succeed("echo alice | su - alice -c 'sudo -S -k true'")
+
+    with subtest("optional installs"):
+        # Base packages upstream ships, and the nixpkgs mappings for
+        # Omarchy's install menu.
+        print(user("try --help | head -3"))
+        print(user("asdcontrol --about", check=False)[1])
+        print(user("sudo -n -l /run/current-system/sw/bin/asdcontrol --detect /dev/hiddev0"))
+        out = user("omnixy-pkg resolve t3code-bin openai-codex-desktop zen-browser-bin once-bin nordvpn-bin lutris openclaw omarchy-emacs emacs-wayland lib32-vulkan-radeon")
+        print(out)
+        assert "?" not in out, out
+        machine.succeed("grep -q '/etc/zen/policies' /run/current-system/sw/bin/omarchy-install-browser")
 
     with subtest("omarchy cli"):
         print(user("omarchy-version"))

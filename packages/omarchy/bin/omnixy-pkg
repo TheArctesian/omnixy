@@ -30,7 +30,7 @@ declare -A MAP=(
   [emacs-wayland]=emacs-pgtk
   [tobi-try]=omnixy#tobi-try
   [asdcontrol]=omnixy#asdcontrol
-  [once-bin]=omnixy#once
+  [once-bin]='!omnixy.features.once = true;'
   [perplexity]=omnixy#perplexity
   [grok-bot]=omnixy#grok-bot
   [openclaw]=omnixy#openclaw
@@ -126,6 +126,7 @@ declare -A PROBE=(
   [ydotool]=ydotool
   [docker]=docker
   [nordvpn-bin]=nordvpn
+  [once-bin]=once
   [lib32-vulkan-intel]='@test -e /run/opengl-driver-32'
   [lib32-vulkan-radeon]='@test -e /run/opengl-driver-32'
   [lib32-nvidia-utils]='@test -e /run/opengl-driver-32'
