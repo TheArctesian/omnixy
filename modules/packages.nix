@@ -164,6 +164,15 @@ let
     v4l-utils
     cryptsetup
     efibootmgr
+    # The limiter in omarchy-audio-tuning's filter chains: just the LV2
+    # bundle, not lsp-plugins' JACK/VST/GStreamer builds (526 MB). The UI
+    # library (which pulls those in) is left out: filter-chain never loads it.
+    (pkgs.runCommand "lsp-plugins-lv2-${lsp-plugins.version}" { } ''
+      mkdir -p $out/lib/lv2
+      cp -r ${lsp-plugins}/lib/lv2/lsp-plugins.lv2 $out/lib/lv2/
+      chmod -R u+w $out
+      rm $out/lib/lv2/lsp-plugins.lv2/lsp-plugins-lv2ui.so
+    '')
     gtk3 # gtk-launch, gtk-update-icon-cache
     hicolor-icon-theme
   ];

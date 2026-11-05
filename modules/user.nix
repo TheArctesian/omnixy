@@ -27,10 +27,12 @@ in
     };
 
     # Read by upstream's first-run (git identity, XCompose shortcuts).
-    environment.sessionVariables = {
-      OMARCHY_USER_NAME = cfg.fullName;
-      OMARCHY_USER_EMAIL = cfg.email;
-    };
+    # pam_env reads "@" as the start of an @{VAR} expansion and drops the
+    # whole variable, so the email skips sessionVariables (pam) and goes to
+    # the user manager (what the session's apps inherit) and to shells.
+    environment.sessionVariables.OMARCHY_USER_NAME = cfg.fullName;
+    environment.variables.OMARCHY_USER_EMAIL = cfg.email;
+    systemd.user.settings.Manager.DefaultEnvironment = lib.mkIf (cfg.email != "") ''"OMARCHY_USER_EMAIL=${cfg.email}"'';
 
     # Omarchy's own user units, shipped in the omarchy package.
     systemd.packages = [ pkgs.omarchy ];

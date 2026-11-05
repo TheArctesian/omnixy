@@ -93,6 +93,9 @@ in
     ];
     systemd.tmpfiles.rules = [
       "d /etc/sudoers.d 0750 root root -"
+      # Mutable drop-in dirs for omarchy-dns (the main files are NixOS's).
+      "d /etc/systemd/resolved.conf.d 0755 root root -"
+      "d /etc/NetworkManager/conf.d 0755 root root -"
       "r! /etc/sudoers.d/99-omarchy-nopasswd-*"
     ];
 

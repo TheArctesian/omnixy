@@ -36,6 +36,10 @@ This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) w
 | Reset Computer calls the factory-reset stub (ONX-11-082) | Menu entry removed |
 | Sunshine firewall (ONX-11-020) | Printed option includes `openFirewall`; the script already skips ufw when it is absent |
 | Omarchy's own apps: omacalc, omacut, omawrite, aether, omazed, omarchy-nvim (ONX-5-014/015, ONX-9-015/021, ONX-12-007/008) | Built from source in `packages/` (follow-up change). `omnixy-pkg` installs them from the registered `omnixy` flake. omarchy-nvim is seeded on login without the prebuilt plugin cache. |
+| Root halves of `omarchy-dns`, `omarchy-theme-set-browser-policy`, `omarchy-windows-vm` pin `PATH` to empty FHS dirs (ONX-11-127, ONX-10-005, ONX-11-047, ONX-11-124; found by the re-audit) | `PATH` is the system profile. The VM test runs `sudo -n omarchy-dns DHCP` for real. |
+| `omarchy-audio-tuning` needs lsp-plugins at `/usr/lib/lv2` (ONX-11-102, ONX-4-018) | The LV2 bundle (without its UI library) is in the base packages; path rewritten; `LV2_PATH` set for the session |
+| `omarchy-debug` / `omarchy-upload-log` package section uses pacman (ONX-11-095/096) | `omnixy-pkg list` (system and profile packages) |
+| Omarchy user units get NixOS's minimal `PATH`, so the sleep lock fails (`dbus-monitor: not found`) | System and per-user profiles on their `path` |
 | Dead `faillock.conf` with no `pam_faillock` (ONX-15-004) | Removed (see open gaps) |
 
 ## Open gaps
@@ -47,8 +51,10 @@ This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) w
 | `pam_faillock` (OMA-6-048, OMA-8-056) | NixOS has no faillock option. Wiring it through `security.pam.services.*.rules` affects every login path and needs real-hardware testing first. NixOS has *no* lockout by default, so this is a hardening gap, not a usability one. |
 | Hardware quirks (`install/hardware/*`, ONX-14-003), `asusctl`, `qmk_hid` keyboard lights (ONX-10-007, ONX-11-049) | Machine-specific. Use nixos-hardware and `services.asusd`. They are not on by default. |
 | `omarchy-install-dev-env` PHP edits `/etc/php`; prebuilt mise runtimes need nix-ld (ONX-11-030) | Needs a design decision: enabling `programs.nix-ld` system-wide changes what binaries run. |
-| `omarchy-debug` / `omarchy-upload-log` package section uses pacman (ONX-11-095/096) | It degrades to "unknown"; cosmetic. |
 | GeForce NOW (flatpak), Steam, Tailscale, sshd, fprintd, FIDO2 | Option-backed by design: the command prints the option and stops. |
 | `omarchy-update-available` often reports updates (ONX-8-010) | nixos-unstable moves daily. A stable channel or a less frequent check would fix it. |
 | SDDM runs on Weston, not Hyprland (ONX-10-011) | NixOS' SDDM Wayland mode. The visual result is the same theme. |
+| `omarchy-setup-direct-boot` (ONX-11-110) | Needs an Omarchy UKI in `/boot/EFI/Linux`. NixOS boots its generations through systemd-boot instead. |
+| `etc/profile.d/omarchy.sh` (ONX-6-033) | Not mirrored. It sources `env-bootstrap`, which the OmniXY session already does. Check that login shells outside the session do not need it. |
+| voxtype (ONX-9-035, ONX-11-119) | `voxtype-bin` maps to nixpkgs `voxtype`, but the install script's post-install steps assume Arch paths. |
 | Guided installer (ONX-4-009) | The ISO is a live desktop with `nixos-install`/disko. |

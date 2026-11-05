@@ -91,6 +91,9 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("journalctl -b -t omarchy-shell | grep -q 'omarchy-shell paths'", timeout=300)
         machine.sleep(60)
         machine.screenshot("01-desktop")
+        # Software rendering is slow enough that Omarchy's 5-minute idle lock
+        # can fire mid-test and swallow key presses. Stay awake.
+        user("omarchy-toggle-idle stay-awake")
         print(user("hyprctl -j monitors"))
 
     with subtest("terminal binding"):
@@ -129,6 +132,19 @@ pkgs.testers.runNixOSTest {
         # User units see the system profile (dbus-monitor for the sleep lock).
         machine.wait_until_succeeds("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active omarchy-sleep-lock'", timeout=30)
         machine.fail("journalctl -b | grep -q 'dbus-monitor: not found'")
+        # Audio tuning's limiter is found by PipeWire, and root halves of
+        # the sudo re-exec scripts can find coreutils.
+        machine.succeed("test -f /run/current-system/sw/lib/lv2/lsp-plugins.lv2/limiter_stereo.ttl")
+        machine.succeed("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user show-environment' | grep -q '^LV2_PATH=/run/current-system/sw/lib/lv2'")
+        machine.succeed("grep -q '^  export PATH=/run/current-system/sw/bin' /run/current-system/sw/bin/omarchy-dns")
+        user("sudo -n /run/current-system/sw/bin/omarchy-dns Cloudflare")
+        machine.succeed("grep -q '^DNS=1.1.1.1' /etc/systemd/resolved.conf.d/90-omarchy-dns.conf")
+        machine.succeed("resolvectl status | grep -q 1.1.1.1")
+        user("sudo -n /run/current-system/sw/bin/omarchy-dns DHCP")
+        machine.succeed("grep -q '^DNSOverTLS=no' /etc/systemd/resolved.conf.d/90-omarchy-dns.conf")
+        # First-run sets the git identity from omnixy.email (pam_env would
+        # drop it because of the "@").
+        machine.wait_until_succeeds("su - alice -c 'git config --global user.email' | grep -qx alice@example.com", timeout=120)
         machine.succeed("test -f /run/current-system/sw/share/icons/hicolor/256x256/apps/hey.png")
         print(user("omnixy-pkg resolve ttf-iosevka-nerd zed openssh libretro-mame"))
 
@@ -153,9 +169,11 @@ pkgs.testers.runNixOSTest {
         wait_for_window("omacalc")
         machine.sleep(10)
         machine.screenshot("05-omacalc")
-        user("pkill -f 'bin/[.]omacalc-wrapped'", check=False)
+        user("kill $(hyprctl -j clients | jq '.[] | select(.class == \"omacalc\") | .pid')")
         for _ in range(12):
-            if "omacalc" not in user("hyprctl -j clients").lower():
+            # Under TCG Hyprland's IPC can time out while it tears the window down.
+            status, out = user("hyprctl -j clients", check=False)
+            if status == 0 and "omacalc" not in out.lower():
                 break
             machine.sleep(5)
         else:
