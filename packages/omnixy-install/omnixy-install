@@ -712,12 +712,22 @@ on_exit() {
   fi
 }
 
+# The install takes longer than the live session's idle timeouts: without this
+# hypridle locks the screen (behind the live password) and blanks it midway.
+# The holder exits with the installer, however that ends.
+inhibit_idle() {
+  command -v systemd-inhibit >/dev/null || return 0
+  systemd-inhibit --what=idle:sleep:handle-lid-switch --who=omnixy-install \
+    --why="Installing OmniXY" tail --pid=$$ -f /dev/null >/dev/null 2>&1 &
+}
+
 main() {
   trap on_exit EXIT
   show_logo
 
   if ((!dry_run)); then
     [[ -d /sys/firmware/efi ]] || die "this machine booted without UEFI; OmniXY installs with systemd-boot and needs UEFI"
+    inhibit_idle
   fi
 
   ask_keyboard
@@ -792,8 +802,8 @@ main() {
     return 0
   fi
 
-  exec 1>&3 2>&4
   step "OmniXY is installed"
+  exec 1>&3 2>&4
   [[ $reboot_after == no ]] && return 0
   if confirm "Reboot into OmniXY now?"; then
     sync
