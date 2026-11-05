@@ -83,13 +83,6 @@ in
       priority = 100;
     };
 
-    # Ten tries before a two-minute lockout (upstream raises Arch's default 3).
-    security.pam.services.login.failDelay.enable = lib.mkDefault false;
-    environment.etc."security/faillock.conf".text = ''
-      deny = 10
-      unlock_time = 120
-    '';
-
     # gpu-screen-recorder needs cap_sys_admin for KMS capture.
     programs.gpu-screen-recorder.enable = true;
     programs.localsend.enable = lib.mkIf cfg.preinstalls.enable true;

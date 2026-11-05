@@ -8,6 +8,7 @@
 #   packages.nix  omarchy-base.packages mapped to nixpkgs
 #   services.nix  install/config/enable-services.sh, firewall, PAM, docker
 #   system.nix    /etc drop-ins, fonts, plymouth, zram, environment
+#   tuning.nix    upstream's etc/ drop-ins (sysctl, logind, oomd, sudoers...)
 #   user.nix      the omnixy.user account and its user units
 { lib, ... }:
 let
@@ -19,6 +20,7 @@ in
     ./packages.nix
     ./services.nix
     ./system.nix
+    ./tuning.nix
     ./user.nix
   ];
 
