@@ -41,6 +41,8 @@ in
       theme = "omarchy";
       themePackages = [ pkgs.omnixy-plymouth-theme ];
     };
+    # omarchy-plymouth-current and the preview read the theme from the profile.
+    environment.systemPackages = lib.mkIf cfg.features.plymouth [ pkgs.omnixy-plymouth-theme ];
     boot.consoleLogLevel = lib.mkIf cfg.features.plymouth (lib.mkDefault 3);
     boot.kernelParams = lib.mkIf cfg.features.plymouth [
       "quiet"
@@ -62,6 +64,25 @@ in
         };
       };
     };
+
+    # Input method: fcitx5 with GTK/Qt modules (omarchy-fcitx5.service starts
+    # it; upstream's environment.d file above sets the IM variables).
+    i18n.inputMethod = {
+      enable = lib.mkDefault true;
+      type = "fcitx5";
+      fcitx5.waylandFrontend = true;
+      fcitx5.addons = [ pkgs.fcitx5-gtk ];
+    };
+
+    # Hyprland's input.lua reads XKBLAYOUT/XKBVARIANT from /etc/vconsole.conf,
+    # which NixOS does not write. Derive them from services.xserver.xkb.
+    environment.etc."vconsole.conf".text = lib.mkForce ''
+      KEYMAP=${config.console.keyMap}
+      ${lib.optionalString (config.console.font != null) "FONT=${config.console.font}"}
+      XKBLAYOUT=${config.services.xserver.xkb.layout}
+      XKBVARIANT=${config.services.xserver.xkb.variant}
+      XKBOPTIONS=${config.services.xserver.xkb.options}
+    '';
 
     # The shell's browser theme sync writes a managed policy here.
     programs.chromium.enable = true;
