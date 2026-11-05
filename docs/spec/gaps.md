@@ -1,6 +1,6 @@
 # Gap analysis: Omarchy v4.0.6 vs OmniXY
 
-This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) with [omnixy-spec.md](omnixy-spec.md) (`ONX-*`, OmniXY as audited before this change). Both specs are in ASD-STE100 Simplified Technical English and use the same 16-section outline. `ONX-*` statuses describe the tree *before* the fixes below. Re-audit after merging.
+This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) with [omnixy-spec.md](omnixy-spec.md) (`ONX-*`, OmniXY as re-audited after PRs #3 and #4). Both specs are in ASD-STE100 Simplified Technical English and use the same 16-section outline. `ONX-*` statuses were re-audited on 2026-11-04, after PRs #3 and #4. They describe the tree *after* the fixes below.
 
 ## Fixed in this change
 
