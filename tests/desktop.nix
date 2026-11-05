@@ -126,6 +126,9 @@ pkgs.testers.runNixOSTest {
         print(user("sudo -n -l /run/current-system/sw/bin/omarchy-dns DHCP"))
         machine.succeed("test \"$(cat /proc/sys/vm/swappiness)\" = 150")
         machine.succeed("id -nG alice | grep -qw docker")
+        # User units see the system profile (dbus-monitor for the sleep lock).
+        machine.wait_until_succeeds("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active omarchy-sleep-lock'", timeout=30)
+        machine.fail("journalctl -b | grep -q 'dbus-monitor: not found'")
         machine.succeed("test -f /run/current-system/sw/share/icons/hicolor/256x256/apps/hey.png")
         print(user("omnixy-pkg resolve ttf-iosevka-nerd zed openssh libretro-mame"))
 
@@ -136,7 +139,7 @@ pkgs.testers.runNixOSTest {
         machine.succeed("test -L /home/alice/.config/nvim/lua/plugins/theme.lua")
         machine.succeed("test -e /home/alice/.config/nvim/lua/plugins/theme.lua")
         print(user("omnixy-pkg resolve omacalc aether omazed omarchy-nvim"))
-        print(machine.succeed("nix registry list | grep omnixy"))
+        machine.succeed("grep -q '\"id\": *\"omnixy\"' /etc/nix/registry.json")
         def wait_for_window(cls, timeout=120):
             for _ in range(timeout // 5):
                 status, out = user("hyprctl -j clients", check=False)
