@@ -8,8 +8,8 @@
 # pacman-contrib, kernel-modules-hook, qemu-user-static-binfmt, ufw/ufw-docker
 # (networking.firewall), mise-bin (mise), dotnet-runtime, python-poetry-core,
 # mariadb-libs. Omarchy's own apps (aether, omacalc, omacut, omawrite,
-# omarchy-nvim, omazed) are packaged in ../packages. Not packaged for NixOS
-# yet: tobi-try, asdcontrol.
+# omarchy-nvim, omazed, omarchy-emacs) and tobi-try and asdcontrol are
+# packaged in ../packages.
 {
   config,
   lib,
@@ -35,6 +35,8 @@ let
     ttfx
     tensaku
     omarchy-nvim
+    tobi-try
+    asdcontrol
 
     # Desktop
     quickshell

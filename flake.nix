@@ -29,6 +29,19 @@
         overlays = [ self.overlays.default ];
       };
 
+      # Opt-in installs that nixpkgs gates behind a config flag, built here so
+      # `omnixy-pkg` can install them from the menu like upstream does:
+      # Lutris' FHS env still pulls gtk2 (marked broken as deprecated), and
+      # nixpkgs flags OpenClaw because it lets an LLM act on untrusted input.
+      pkgsOptIn = import nixpkgs {
+        inherit system;
+        config = {
+          allowUnfree = true;
+          problems.handlers."gtk+".broken = "warn";
+          allowInsecurePredicate = p: lib.getName p == "openclaw";
+        };
+      };
+
       mkSystem =
         modules:
         lib.nixosSystem {
@@ -75,10 +88,14 @@
           aether
           omazed
           omarchy-nvim
+          omarchy-emacs
+          tobi-try
+          asdcontrol
           omacalc
           omawrite
           omacut
           ;
+        inherit (pkgsOptIn) lutris openclaw;
         iso = self.nixosConfigurations.iso.config.system.build.isoImage;
         vm = self.nixosConfigurations.vm.config.system.build.vm;
         default = pkgs.omarchy;

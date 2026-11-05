@@ -88,6 +88,10 @@ in
               "${bin}/omarchy-dns DHCP"
               "${bin}/omarchy-theme-set-browser-policy [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]"
               "${bin}/timedatectl ^set-timezone [A-Za-z0-9_+][A-Za-z0-9_+.-]*(/[A-Za-z0-9_+][A-Za-z0-9_+.-]*)*$"
+              # asdcontrol.sudoers: only the calls omarchy-brightness-display-apple makes.
+              "${bin}/asdcontrol ^--detect (/dev/(usb/)?hiddev[0-9]+)( /dev/(usb/)?hiddev[0-9]+)*$"
+              "${bin}/asdcontrol ^/dev/(usb/)?hiddev[0-9]+$"
+              "${bin}/asdcontrol ^/dev/(usb/)?hiddev[0-9]+ -- [+-]?[0-9]{1,3}%$"
             ];
       }
     ];

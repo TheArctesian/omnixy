@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# omarchy:summary=Install the NordVPN service with optional GUI.
+# omarchy:requires-sudo=true
+
+# On NixOS nordvpnd and the nordvpn group come from omnixy.features.nordvpn;
+# omarchy-pkg-add prints the option when it is not set yet. Once it is, the
+# daemon runs and the user is in the group, so only the login is left.
+
+echo "Installing NordVPN..."
+omarchy-pkg-add nordvpn-bin || exit 1
+
+if ! id -nG | grep -qw nordvpn; then
+  echo -e "\nNordVPN is installed. Log out and back in (or reboot) so your session joins the nordvpn group."
+  echo
+  gum confirm "Reboot now to make NordVPN usable?" && omarchy-system-reboot
+  exit 0
+fi
+
+echo -e "\nNordVPN is ready. Run 'nordvpn login' to authenticate."

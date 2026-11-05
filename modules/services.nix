@@ -61,6 +61,10 @@ in
       enableOnBoot = false; # socket-activated, like docker.socket upstream
     };
 
+    # omarchy-install-service-nordvpn: nordvpnd plus the group its CLI needs.
+    services.nordvpn.enable = lib.mkIf f.nordvpn true;
+    users.users.${cfg.user}.extraGroups = lib.optional f.nordvpn "nordvpn";
+
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.upower.enable = true;
     services.udisks2.enable = true;

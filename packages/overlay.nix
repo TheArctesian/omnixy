@@ -13,6 +13,9 @@ final: prev: {
   aether = final.callPackage ./aether.nix { };
   omazed = final.callPackage ./omazed.nix { };
   omarchy-nvim = final.callPackage ./omarchy-nvim.nix { };
+  omarchy-emacs = final.callPackage ./omarchy-emacs.nix { };
+  tobi-try = final.callPackage ./tobi-try.nix { };
+  asdcontrol = final.callPackage ./asdcontrol.nix { };
   omacalc = final.callPackage ./oma-qt-app.nix {
     pname = "omacalc";
     version = "0.3.1";

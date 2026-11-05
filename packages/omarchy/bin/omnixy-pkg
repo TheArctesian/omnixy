@@ -26,6 +26,17 @@ declare -A MAP=(
   [omawrite]=omnixy#omawrite
   [omazed]=omnixy#omazed
   [omarchy-nvim]=omnixy#omarchy-nvim
+  [omarchy-emacs]=omnixy#omarchy-emacs
+  [emacs-wayland]=emacs-pgtk
+  [tobi-try]=omnixy#tobi-try
+  [asdcontrol]=omnixy#asdcontrol
+  [once-bin]=omnixy#once
+  [perplexity]=omnixy#perplexity
+  [grok-bot]=omnixy#grok-bot
+  [openclaw]=omnixy#openclaw
+  [openai-codex-desktop]=chatgpt
+  [t3code-bin]=t3code
+  [winetricks]=winetricks
   [1password]='!programs._1password-gui.enable = true;'
   [1password-cli]='!programs._1password.enable = true;'
   [bitwarden]=bitwarden-desktop
@@ -46,10 +57,10 @@ declare -A MAP=(
   [google-chrome]=google-chrome
   [heroic-games-launcher-bin]=heroic
   [lmstudio-bin]=lmstudio
-  [lutris]=lutris
+  [lutris]=omnixy#lutris
   [microsoft-edge-stable-bin]=microsoft-edge
   [minecraft-launcher]=prismlauncher
-  [nordvpn-bin]='?'
+  [nordvpn-bin]='!omnixy.features.nordvpn = true;'
   [openbsd-netcat]=netcat-openbsd
   [openssh]='!services.openssh.enable = true;'
   [php-sqlite]=php
@@ -71,7 +82,7 @@ declare -A MAP=(
   [wine-mono]=-
   [xpadneo-dkms]='!hardware.xpadneo.enable = true;'
   [ydotool]='!programs.ydotool.enable = true;'
-  [zen-browser-bin]='?'
+  [zen-browser-bin]=omnixy#zen-browser
   [docker]='!omnixy.features.docker = true;'
   [docker-compose]='!omnixy.features.docker = true;'
   [docker-buildx]='!omnixy.features.docker = true;'
@@ -114,6 +125,11 @@ declare -A PROBE=(
   [flatpak]=flatpak
   [ydotool]=ydotool
   [docker]=docker
+  [nordvpn-bin]=nordvpn
+  [lib32-vulkan-intel]='@test -e /run/opengl-driver-32'
+  [lib32-vulkan-radeon]='@test -e /run/opengl-driver-32'
+  [lib32-nvidia-utils]='@test -e /run/opengl-driver-32'
+  [lib32-nvidia-580xx-utils]='@test -e /run/opengl-driver-32'
   [docker-compose]='@docker compose version'
   [docker-buildx]='@docker buildx version'
 )
@@ -124,15 +140,19 @@ resolve() {
     echo "${MAP[$name]}"
     return
   fi
-  # Other Omarchy desktop apps (once, t3code, ...) and AUR-only builds have
-  # no nixpkgs equivalent.
+  # Other Omarchy packages and AUR-only builds have no nixpkgs equivalent.
   case $name in
     # RetroArch's cores and assets are part of nixpkgs' retroarch-full.
     libretro-* | retroarch-assets-* | retroarch-joypad-autoconfig*)
       echo '-'
       return
       ;;
-    omarchy-* | oma* | once-bin | t3code-bin | openai-codex-desktop | perplexity | grok-bot | hermes-desktop | openclaw)
+    # 32-bit graphics drivers come with the 32-bit OpenGL/Vulkan stack.
+    lib32-vulkan-* | lib32-nvidia-*)
+      echo '!hardware.graphics.enable32Bit = true;'
+      return
+      ;;
+    omarchy-* | oma* | hermes-desktop)
       echo '?'
       return
       ;;
