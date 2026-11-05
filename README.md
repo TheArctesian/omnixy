@@ -75,6 +75,10 @@ omnixy = {
 
 ### Try it first
 
+Download the live ISO: **[iso.omnixy.org/latest](https://iso.omnixy.org/latest/omnixy-latest-x86_64-linux.iso)**.
+Checksums and older versions are on the [releases page](https://github.com/TheArctesian/omnixy/releases).
+It boots into the desktop as `omnixy` (password `omnixy`). Or build it yourself:
+
 ```bash
 nix run github:TheArctesian/omnixy#vm   # throwaway VM, auto-logs in as omnixy/omnixy
 nix build github:TheArctesian/omnixy#iso  # live ISO, boots straight into the desktop
@@ -103,6 +107,7 @@ nix run .#vm                                      # interactive VM
 ```
 
 To move to a new Omarchy release, follow [docs/updating-upstream.md](docs/updating-upstream.md).
+To publish an ISO, see [docs/releasing.md](docs/releasing.md).
 
 ## Layout
 

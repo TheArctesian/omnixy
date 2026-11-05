@@ -1,0 +1,178 @@
+# Release: every push to master builds the live ISO, publishes it to
+# Cloudflare R2 (served at https://iso.omnixy.org), tags the commit and
+# creates the GitHub release that links to it.
+#
+# The version comes from N, the number of PRs merged into master:
+# v<N/10000>.<N/100 % 100>.<N % 100> (PR 4 is v0.0.4, PR 100 v0.1.0,
+# PR 3,222,222 v322.22.22), so each merged PR is one release. A push that merges no PR (the count is unchanged, the tag
+# already exists) is skipped. Run it by hand (workflow_dispatch) to rebuild
+# and re-upload an existing version.
+#
+# GitHub release assets max out at 2 GiB and the ISO is ~4.5 GB, so the ISO
+# lives in R2 and the release carries the checksum and the links.
+#
+# Repository secrets: R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (an R2 API token
+# with Object Read & Write on the bucket). Repository variable: R2_ACCOUNT_ID.
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to rebuild and re-publish (e.g. v0.0.5)
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  BUCKET: omnixy-iso
+  PUBLIC_URL: https://iso.omnixy.org
+  KEEP_RELEASES: 3
+  # R2 rejects some of aws-cli's newer default integrity checksums.
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+  AWS_DEFAULT_REGION: auto
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.sha }}
+          fetch-depth: 0
+
+      - name: Version
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+          else
+            merged=$(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --base master \
+              --limit 10000 --json number --jq length)
+            # Patch and minor each hold two digits: PR 100 is 0.1.0, PR 10000
+            # is 1.0.0, PR 3,222,222 is 322.22.22.
+            tag="v$((merged / 10000)).$((merged / 100 % 100)).$((merged % 100))"
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "$tag already exists (no new PR merged); nothing to release."
+              echo "skip=true" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # The tag is created with the release, after the upload, so a
+            # failed build does not use up the version: the next push retries.
+          fi
+          echo "Releasing $tag"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+
+      # The runner has ~14 GB free; the ISO build needs more than that.
+      - name: Free disk space
+        if: steps.tag.outputs.skip != 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+            /usr/share/swift /usr/local/share/powershell /usr/local/lib/node_modules
+          sudo docker image prune --all --force >/dev/null || true
+          df -h /
+
+      - uses: cachix/install-nix-action@v31
+        if: steps.tag.outputs.skip != 'true'
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            max-jobs = auto
+
+      - name: Build ISO
+        if: steps.tag.outputs.skip != 'true'
+        run: |
+          nix build .#iso -L --print-build-logs
+          iso=$(find -L result/iso -name '*.iso' | head -1)
+          [[ -n $iso ]] || { echo "No ISO in result/iso" >&2; exit 1; }
+          name="omnixy-${{ steps.tag.outputs.tag }}-x86_64-linux.iso"
+          mkdir -p out
+          cp --no-preserve=mode "$iso" "out/$name"
+          (cd out && sha256sum "$name" >SHA256SUMS)
+          cat out/SHA256SUMS
+          ls -lh out
+
+      - name: Upload to R2
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          endpoint="https://${{ vars.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
+          s3() { aws s3 --endpoint-url "$endpoint" "$@"; }
+          tag="${{ steps.tag.outputs.tag }}"
+          name="omnixy-$tag-x86_64-linux.iso"
+
+          s3 cp "out/$name" "s3://$BUCKET/releases/$tag/$name" \
+            --content-type application/x-iso9660-image
+          s3 cp out/SHA256SUMS "s3://$BUCKET/releases/$tag/SHA256SUMS" --content-type text/plain
+
+          # Stable "latest" names; a server-side copy, no second upload.
+          s3 cp "s3://$BUCKET/releases/$tag/$name" "s3://$BUCKET/latest/omnixy-latest-x86_64-linux.iso" \
+            --content-type application/x-iso9660-image \
+            --content-disposition "attachment; filename=\"$name\""
+          sed "s/$name/omnixy-latest-x86_64-linux.iso/" out/SHA256SUMS >out/SHA256SUMS.latest
+          s3 cp out/SHA256SUMS.latest "s3://$BUCKET/latest/SHA256SUMS" --content-type text/plain
+          echo "$tag" >out/version.txt
+          s3 cp out/version.txt "s3://$BUCKET/latest/version.txt" --content-type text/plain
+
+          # Keep the newest $KEEP_RELEASES releases.
+          s3 ls "s3://$BUCKET/releases/" | awk '/PRE/ {sub("/$", "", $2); print $2}' |
+            sort -V | head -n -"$KEEP_RELEASES" | while read -r old; do
+              echo "Pruning $old"
+              s3 rm --recursive "s3://$BUCKET/releases/$old/"
+            done
+
+      - name: GitHub release
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          name="omnixy-$tag-x86_64-linux.iso"
+          sum=$(cut -d' ' -f1 out/SHA256SUMS)
+          size=$(du -h "out/$name" | cut -f1)
+          cat >notes.md <<EOF
+          ## Download
+
+          | | |
+          | --- | --- |
+          | **ISO** ($size) | [$name]($PUBLIC_URL/releases/$tag/$name) |
+          | SHA-256 | \`$sum\` |
+          | Always the newest release | [$PUBLIC_URL/latest/omnixy-latest-x86_64-linux.iso]($PUBLIC_URL/latest/omnixy-latest-x86_64-linux.iso) |
+
+          The ISO is hosted on Cloudflare R2 because it is larger than GitHub's
+          2 GiB asset limit. \`SHA256SUMS\` is attached here so you can check the
+          download against GitHub:
+
+          \`\`\`bash
+          curl -LO $PUBLIC_URL/releases/$tag/$name
+          sha256sum -c SHA256SUMS
+          \`\`\`
+
+          Write it to a USB stick with \`sudo dd if=$name of=/dev/sdX bs=4M status=progress oflag=sync\`.
+          It boots into the OmniXY desktop as \`omnixy\` (password \`omnixy\`); install with
+          \`nixos-install\` / disko and the flake template (see the README).
+          EOF
+          sed -i 's/^          //' notes.md
+          prerelease=()
+          [[ $tag == *-rc* || $tag == *-beta* ]] && prerelease=(--prerelease)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes-file notes.md
+            gh release upload "$tag" out/SHA256SUMS --clobber
+          else
+            gh release create "$tag" --title "OmniXY $tag" --notes-file notes.md \
+              --target "$GITHUB_SHA" "${prerelease[@]}" out/SHA256SUMS
+          fi
