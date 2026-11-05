@@ -94,6 +94,10 @@
           omacalc
           omawrite
           omacut
+          grok-bot
+          once
+          perplexity
+          zen-browser
           ;
         inherit (pkgsOptIn) lutris openclaw;
         iso = self.nixosConfigurations.iso.config.system.build.isoImage;
