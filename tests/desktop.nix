@@ -105,6 +105,24 @@ pkgs.testers.runNixOSTest {
         machine.sleep(8)
         machine.screenshot("04-theme-catppuccin")
 
+    with subtest("second theme switch keeps a complete theme"):
+        user("omarchy-theme-set Gruvbox")
+        machine.wait_until_succeeds("grep -qi gruvbox /home/alice/.local/state/omarchy/current/theme.name", timeout=60)
+        machine.succeed("test -f /home/alice/.local/state/omarchy/current/theme/colors.toml")
+        machine.fail("test -e /home/alice/.local/state/omarchy/current/theme/next-theme")
+
+    with subtest("system parity"):
+        # Audio helpers need pactl against PipeWire's Pulse server.
+        print(user("pactl info | head -5"))
+        # Hyprland's keyboard layout comes from vconsole.conf.
+        machine.succeed("grep -q '^XKBLAYOUT=' /etc/vconsole.conf")
+        # One-click DNS presets must not prompt for a password.
+        print(user("sudo -n -l /run/current-system/sw/bin/omarchy-dns DHCP"))
+        machine.succeed("test \"$(cat /proc/sys/vm/swappiness)\" = 150")
+        machine.succeed("id -nG alice | grep -qw docker")
+        machine.succeed("test -f /run/current-system/sw/share/icons/hicolor/256x256/apps/hey.png")
+        print(user("omnixy-pkg resolve ttf-iosevka-nerd zed openssh libretro-mame"))
+
     with subtest("omarchy cli"):
         print(user("omarchy-version"))
         print(user("omarchy commands 2>&1 | head -40"))

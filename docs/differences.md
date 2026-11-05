@@ -18,6 +18,9 @@ system*, because NixOS owns `/etc`, `/usr` and package management.
 | Fingerprint / FIDO2 setup | print the NixOS options (`services.fprintd.enable`, `security.pam.u2f`) |
 | ufw + ufw-docker | `networking.firewall` (LocalSend ports open) |
 | `/usr/share/omarchy` | `/run/current-system/sw/share/omarchy` |
+| `etc/` drop-ins (sysctl, logind, oomd, resolved, sudoers.d, docker) | `modules/tuning.nix` |
+| `/usr/bin/<app>` checks | `command -v <app>` (finds nix profile installs too) |
+| Store files copied read-only | `omnixy-cp` keeps copies writable |
 
 ## Apps that need a NixOS option
 
@@ -28,17 +31,20 @@ FIDO2/U2F, OpenSSH server, Sunshine, supergfxctl, xpadneo, ydotool.
 ## Not available (Arch-only)
 
 These commands are stubs that exit with an explanation: `omarchy-upgrade-to-quattro`,
-`omarchy-refresh-pacman`, `omarchy-refresh-limine`, `omarchy-update-keyring`,
+`omarchy-refresh-pacman`, `omarchy-update-keyring`,
 `omarchy-update-aur-pkgs`, `omarchy-update-pacman-guard`, `omarchy-update-pkg-prune`,
-`omarchy-update-orphan-pkgs`, `omarchy-update-system-pkgs-when-conflicted`,
-`omarchy-update-firmware` (use `fwupdmgr update`), `omarchy-pkg-aur-*`,
+`omarchy-update-orphan-pkgs`, `omarchy-update-system-pkgs-when-conflicted`, `omarchy-pkg-aur-*`,
 `omarchy-reinstall-pkgs`, `omarchy-channel-set`, `omarchy-dev-link/unlink`,
 `omarchy-dev-pkg-test`, `omarchy-apply-system`, `omarchy-apply-hardware`,
 `omarchy-provision-owner`, `omarchy-hibernation-setup/remove`,
 `omarchy-toggle-hybrid-gpu`, `omarchy-snapshot`, `omarchy-system-factory-reset`.
 
-The matching menu entries (Install › AUR, Update › Channel, Update › Firmware,
-Update › Config › Plymouth, Hybrid GPU, Hibernate) are removed.
+The matching menu entries (Install › AUR, Update › Channel, Update › Config ›
+Plymouth, Style › Unlock, Setup › Reset Computer, Hybrid GPU, Hibernate) are
+removed. `omarchy-refresh-limine`, `omarchy-refresh-plymouth` and
+`omarchy-refresh-sddm` succeed without doing anything, because the boot loader,
+splash and login theme are declared in NixOS. AUR installs (Chrome, Edge, Brave)
+go through the nixpkgs mapping.
 
 ## Not packaged for NixOS yet
 
@@ -54,6 +60,10 @@ Update › Config › Plymouth, Hybrid GPU, Hibernate) are removed.
 - **Offline ISO installer / provisioning flow:** the OmniXY ISO is a live desktop
   with the standard NixOS installer tools (`nixos-install`, `disko`), not Omarchy's
   guided installer.
+
+## Known gaps
+
+See [spec/gaps.md](spec/gaps.md) for the full list from the spec comparison.
 
 ## Migrations
 
