@@ -1,3 +1,8 @@
 result
 result-*
 *.qcow2
+
+# Local Cloudflare R2 credentials
+r2.env
+*.env
+.claude/

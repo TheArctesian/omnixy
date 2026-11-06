@@ -32,6 +32,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.omacalc
         pkgs.omawrite
+        pkgs.pamtester
       ];
 
       virtualisation = {
@@ -91,6 +92,9 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("journalctl -b -t omarchy-shell | grep -q 'omarchy-shell paths'", timeout=300)
         machine.sleep(60)
         machine.screenshot("01-desktop")
+        # Software rendering is slow enough that Omarchy's 5-minute idle lock
+        # can fire mid-test and swallow key presses. Stay awake.
+        user("omarchy-toggle-idle stay-awake")
         print(user("hyprctl -j monitors"))
 
     with subtest("terminal binding"):
@@ -126,6 +130,22 @@ pkgs.testers.runNixOSTest {
         print(user("sudo -n -l /run/current-system/sw/bin/omarchy-dns DHCP"))
         machine.succeed("test \"$(cat /proc/sys/vm/swappiness)\" = 150")
         machine.succeed("id -nG alice | grep -qw docker")
+        # User units see the system profile (dbus-monitor for the sleep lock).
+        machine.wait_until_succeeds("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active omarchy-sleep-lock'", timeout=30)
+        machine.fail("journalctl -b | grep -q 'dbus-monitor: not found'")
+        # Audio tuning's limiter is found by PipeWire, and root halves of
+        # the sudo re-exec scripts can find coreutils.
+        machine.succeed("test -f /run/current-system/sw/lib/lv2/lsp-plugins.lv2/limiter_stereo.ttl")
+        machine.succeed("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user show-environment' | grep -q '^LV2_PATH=/run/current-system/sw/lib/lv2'")
+        machine.succeed("grep -q '^  export PATH=/run/current-system/sw/bin' /run/current-system/sw/bin/omarchy-dns")
+        user("sudo -n /run/current-system/sw/bin/omarchy-dns Cloudflare")
+        machine.succeed("grep -q '^DNS=1.1.1.1' /etc/systemd/resolved.conf.d/90-omarchy-dns.conf")
+        machine.succeed("resolvectl status | grep -q 1.1.1.1")
+        user("sudo -n /run/current-system/sw/bin/omarchy-dns DHCP")
+        machine.succeed("grep -q '^DNSOverTLS=no' /etc/systemd/resolved.conf.d/90-omarchy-dns.conf")
+        # First-run sets the git identity from omnixy.email (pam_env would
+        # drop it because of the "@").
+        machine.wait_until_succeeds("su - alice -c 'git config --global user.email' | grep -qx alice@example.com", timeout=120)
         machine.succeed("test -f /run/current-system/sw/share/icons/hicolor/256x256/apps/hey.png")
         print(user("omnixy-pkg resolve ttf-iosevka-nerd zed openssh libretro-mame"))
 
@@ -136,7 +156,7 @@ pkgs.testers.runNixOSTest {
         machine.succeed("test -L /home/alice/.config/nvim/lua/plugins/theme.lua")
         machine.succeed("test -e /home/alice/.config/nvim/lua/plugins/theme.lua")
         print(user("omnixy-pkg resolve omacalc aether omazed omarchy-nvim"))
-        print(machine.succeed("nix registry list | grep omnixy"))
+        machine.succeed("grep -q '\"id\": *\"omnixy\"' /etc/nix/registry.json")
         def wait_for_window(cls, timeout=120):
             for _ in range(timeout // 5):
                 status, out = user("hyprctl -j clients", check=False)
@@ -150,11 +170,46 @@ pkgs.testers.runNixOSTest {
         wait_for_window("omacalc")
         machine.sleep(10)
         machine.screenshot("05-omacalc")
-        user("hyprctl dispatch closewindow class:omacalc", check=False)
+        user("kill $(hyprctl -j clients | jq '.[] | select(.class == \"omacalc\") | .pid')")
+        for _ in range(12):
+            # Under TCG Hyprland's IPC can time out while it tears the window down.
+            status, out = user("hyprctl -j clients", check=False)
+            if status == 0 and "omacalc" not in out.lower():
+                break
+            machine.sleep(5)
+        else:
+            raise Exception("omacalc window did not close")
         machine.send_key("meta_l-shift-w")
         wait_for_window("omawrite")
         machine.sleep(10)
         machine.screenshot("06-omawrite")
+
+    with subtest("faillock"):
+        # increase-lockout-limit.sh: 10 wrong passwords lock the account for
+        # 120 s; the lock screen's PAM stack is one that enforces it.
+        pt = "pamtester omarchy-lock-password alice authenticate"
+        faillock = "${pkgs.linux-pam}/bin/faillock --user alice"
+        machine.succeed(f"echo alice | {pt}")
+        for _ in range(10):
+            machine.fail(f"echo wrong | {pt}")
+        machine.fail(f"echo alice | {pt}")
+        print(machine.succeed(faillock))
+        machine.succeed(f"{faillock} --reset")
+        machine.succeed(f"echo alice | {pt}")
+        # sudo uses the same rules, and still authenticates.
+        machine.succeed("grep -q 'pam_faillock.so.*authfail' /etc/pam.d/sudo")
+        machine.succeed("echo alice | su - alice -c 'sudo -S -k true'")
+
+    with subtest("optional installs"):
+        # Base packages upstream ships, and the nixpkgs mappings for
+        # Omarchy's install menu.
+        print(user("try --help | head -3"))
+        print(user("asdcontrol --about", check=False)[1])
+        print(user("sudo -n -l /run/current-system/sw/bin/asdcontrol --detect /dev/hiddev0"))
+        out = user("omnixy-pkg resolve t3code-bin openai-codex-desktop zen-browser-bin once-bin nordvpn-bin lutris openclaw omarchy-emacs emacs-wayland lib32-vulkan-radeon")
+        print(out)
+        assert "?" not in out, out
+        machine.succeed("grep -q '/etc/zen/policies' /run/current-system/sw/bin/omarchy-install-browser")
 
     with subtest("omarchy cli"):
         print(user("omarchy-version"))

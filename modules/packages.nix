@@ -8,8 +8,8 @@
 # pacman-contrib, kernel-modules-hook, qemu-user-static-binfmt, ufw/ufw-docker
 # (networking.firewall), mise-bin (mise), dotnet-runtime, python-poetry-core,
 # mariadb-libs. Omarchy's own apps (aether, omacalc, omacut, omawrite,
-# omarchy-nvim, omazed) are packaged in ../packages. Not packaged for NixOS
-# yet: tobi-try, asdcontrol.
+# omarchy-nvim, omazed, omarchy-emacs) and tobi-try and asdcontrol are
+# packaged in ../packages.
 {
   config,
   lib,
@@ -35,6 +35,8 @@ let
     ttfx
     tensaku
     omarchy-nvim
+    tobi-try
+    asdcontrol
 
     # Desktop
     quickshell
@@ -164,6 +166,15 @@ let
     v4l-utils
     cryptsetup
     efibootmgr
+    # The limiter in omarchy-audio-tuning's filter chains: just the LV2
+    # bundle, not lsp-plugins' JACK/VST/GStreamer builds (526 MB). The UI
+    # library (which pulls those in) is left out: filter-chain never loads it.
+    (pkgs.runCommand "lsp-plugins-lv2-${lsp-plugins.version}" { } ''
+      mkdir -p $out/lib/lv2
+      cp -r ${lsp-plugins}/lib/lv2/lsp-plugins.lv2 $out/lib/lv2/
+      chmod -R u+w $out
+      rm $out/lib/lv2/lsp-plugins.lv2/lsp-plugins-lv2ui.so
+    '')
     gtk3 # gtk-launch, gtk-update-icon-cache
     hicolor-icon-theme
   ];

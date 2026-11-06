@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # omarchy:summary=Nix backend for Omarchy's package helpers (add, drop, present, missing)
-# omarchy:args=<add|drop|present|missing|resolve> <packages...>
+# omarchy:args=<add|drop|present|missing|resolve|list> [packages...]
 # omarchy:hidden=true
 #
 # Omarchy's install scripts speak Arch package names. On OmniXY they are mapped
@@ -26,6 +26,18 @@ declare -A MAP=(
   [omawrite]=omnixy#omawrite
   [omazed]=omnixy#omazed
   [omarchy-nvim]=omnixy#omarchy-nvim
+  [omarchy-emacs]=omnixy#omarchy-emacs
+  [emacs-wayland]=emacs-pgtk
+  [tobi-try]=omnixy#tobi-try
+  [asdcontrol]=omnixy#asdcontrol
+  [once-bin]='!omnixy.features.once = true;'
+  [perplexity]=omnixy#perplexity
+  [grok-bot]=omnixy#grok-bot
+  [openclaw]=omnixy#openclaw
+  [hermes-desktop]=omnixy#hermes-desktop
+  [openai-codex-desktop]=chatgpt
+  [t3code-bin]=t3code
+  [winetricks]=winetricks
   [1password]='!programs._1password-gui.enable = true;'
   [1password-cli]='!programs._1password.enable = true;'
   [bitwarden]=bitwarden-desktop
@@ -46,10 +58,10 @@ declare -A MAP=(
   [google-chrome]=google-chrome
   [heroic-games-launcher-bin]=heroic
   [lmstudio-bin]=lmstudio
-  [lutris]=lutris
+  [lutris]=omnixy#lutris
   [microsoft-edge-stable-bin]=microsoft-edge
   [minecraft-launcher]=prismlauncher
-  [nordvpn-bin]='?'
+  [nordvpn-bin]='!omnixy.features.nordvpn = true;'
   [openbsd-netcat]=netcat-openbsd
   [openssh]='!services.openssh.enable = true;'
   [php-sqlite]=php
@@ -71,7 +83,7 @@ declare -A MAP=(
   [wine-mono]=-
   [xpadneo-dkms]='!hardware.xpadneo.enable = true;'
   [ydotool]='!programs.ydotool.enable = true;'
-  [zen-browser-bin]='?'
+  [zen-browser-bin]=omnixy#zen-browser
   [docker]='!omnixy.features.docker = true;'
   [docker-compose]='!omnixy.features.docker = true;'
   [docker-buildx]='!omnixy.features.docker = true;'
@@ -114,6 +126,12 @@ declare -A PROBE=(
   [flatpak]=flatpak
   [ydotool]=ydotool
   [docker]=docker
+  [nordvpn-bin]=nordvpn
+  [once-bin]=once
+  [lib32-vulkan-intel]='@test -e /run/opengl-driver-32'
+  [lib32-vulkan-radeon]='@test -e /run/opengl-driver-32'
+  [lib32-nvidia-utils]='@test -e /run/opengl-driver-32'
+  [lib32-nvidia-580xx-utils]='@test -e /run/opengl-driver-32'
   [docker-compose]='@docker compose version'
   [docker-buildx]='@docker buildx version'
 )
@@ -124,15 +142,19 @@ resolve() {
     echo "${MAP[$name]}"
     return
   fi
-  # Other Omarchy desktop apps (once, t3code, ...) and AUR-only builds have
-  # no nixpkgs equivalent.
+  # Other Omarchy packages and AUR-only builds have no nixpkgs equivalent.
   case $name in
     # RetroArch's cores and assets are part of nixpkgs' retroarch-full.
     libretro-* | retroarch-assets-* | retroarch-joypad-autoconfig*)
       echo '-'
       return
       ;;
-    omarchy-* | oma* | once-bin | t3code-bin | openai-codex-desktop | perplexity | grok-bot | hermes-desktop | openclaw)
+    # 32-bit graphics drivers come with the 32-bit OpenGL/Vulkan stack.
+    lib32-vulkan-* | lib32-nvidia-*)
+      echo '!hardware.graphics.enable32Bit = true;'
+      return
+      ;;
+    omarchy-* | oma*)
       echo '?'
       return
       ;;
@@ -228,8 +250,15 @@ case $cmd in
         nix profile remove "$target" >/dev/null 2>&1 || true
     done
     ;;
+  list)
+    # name version (source), the stand-in for `pacman -Q` in debug logs.
+    nix-store -q --references /run/current-system/sw 2>/dev/null |
+      sed -nE 's#^/nix/store/[a-z0-9]{32}-(.+)-([0-9][^-]*)$#\1 \2 (system)#p'
+    nix profile list --json 2>/dev/null |
+      jq -r '.elements | to_entries[] | "\(.key) \(.value.storePaths[0] // "" | capture("-(?<v>[0-9][^-]*)$").v // "?") (profile)"' 2>/dev/null
+    ;;
   *)
-    echo "Usage: omnixy-pkg <add|drop|present|missing|resolve> <packages...>" >&2
+    echo "Usage: omnixy-pkg <add|drop|present|missing|resolve|list> [packages...]" >&2
     exit 2
     ;;
 esac

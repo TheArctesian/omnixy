@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# omarchy:summary=Boot straight into OmniXY without showing the boot menu (declarative on OmniXY)
+# omarchy:requires-sudo=false
+
+# Upstream adds a firmware boot entry for its unified kernel image so the
+# Limine menu is skipped. NixOS boots generations through its boot loader,
+# and the menu is what lets you roll back a bad update, so the NixOS way is
+# to hide it: with a timeout of 0, systemd-boot boots the newest generation
+# at once and shows the menu only while a key (Space) is held at power-on.
+
+if [[ ! -d /sys/firmware/efi ]]; then
+  echo "Error: System is not booted in UEFI mode" >&2
+  exit 1
+fi
+
+timeout=$(bootctl status 2>/dev/null | awk -F': *' '/^ *Timeout/ {print $2; exit}')
+loader_conf=$(sudo -n cat /boot/loader/loader.conf 2>/dev/null || cat /boot/loader/loader.conf 2>/dev/null)
+[[ -z $timeout ]] && timeout=$(awk '$1 == "timeout" {print $2}' <<<"$loader_conf")
+
+if [[ $timeout == 0 ]]; then
+  cat <<'MSG'
+Direct boot is on: the boot menu is hidden (hold Space at power-on to see it).
+
+To show the menu again, remove this from your system configuration, then run
+omarchy-update:
+
+  boot.loader.timeout = 0;
+MSG
+else
+  cat <<'MSG'
+On OmniXY direct boot is a NixOS option. Add this to your system configuration,
+then run omarchy-update:
+
+  boot.loader.timeout = 0;
+
+The newest generation then boots straight away; hold Space at power-on to get
+the menu (and older generations) back for a rollback.
+MSG
+fi

@@ -88,11 +88,18 @@ in
               "${bin}/omarchy-dns DHCP"
               "${bin}/omarchy-theme-set-browser-policy [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]"
               "${bin}/timedatectl ^set-timezone [A-Za-z0-9_+][A-Za-z0-9_+.-]*(/[A-Za-z0-9_+][A-Za-z0-9_+.-]*)*$"
+              # asdcontrol.sudoers: only the calls omarchy-brightness-display-apple makes.
+              "${bin}/asdcontrol ^--detect (/dev/(usb/)?hiddev[0-9]+)( /dev/(usb/)?hiddev[0-9]+)*$"
+              "${bin}/asdcontrol ^/dev/(usb/)?hiddev[0-9]+$"
+              "${bin}/asdcontrol ^/dev/(usb/)?hiddev[0-9]+ -- [+-]?[0-9]{1,3}%$"
             ];
       }
     ];
     systemd.tmpfiles.rules = [
       "d /etc/sudoers.d 0750 root root -"
+      # Mutable drop-in dirs for omarchy-dns (the main files are NixOS's).
+      "d /etc/systemd/resolved.conf.d 0755 root root -"
+      "d /etc/NetworkManager/conf.d 0755 root root -"
       "r! /etc/sudoers.d/99-omarchy-nopasswd-*"
     ];
 
@@ -110,9 +117,6 @@ in
 
     # plocate-updatedb.service.d/ac-only.conf
     systemd.services.update-locatedb.unitConfig.ConditionACPower = true;
-
-    # install/hardware/intel/thermald.sh: Intel machines only.
-    services.thermald.enable = lib.mkDefault config.hardware.cpu.intel.updateMicrocode;
 
     environment.etc = {
       "gnupg/dirmngr.conf".source = "${etcSrc}/gnupg/dirmngr.conf";

@@ -5,6 +5,7 @@
 # package. Each file in this directory replaces one slice of that:
 #
 #   desktop.nix   Hyprland + uwsm + SDDM + portals + the OmniXY session
+#   hardware.nix  install/hardware quirks; declares its own omnixy.hardware.*
 #   packages.nix  omarchy-base.packages mapped to nixpkgs
 #   services.nix  install/config/enable-services.sh, firewall, PAM, docker
 #   system.nix    /etc drop-ins, fonts, plymouth, zram, environment
@@ -17,6 +18,7 @@ in
 {
   imports = [
     ./desktop.nix
+    ./hardware.nix
     ./packages.nix
     ./services.nix
     ./system.nix
@@ -104,6 +106,8 @@ in
       firewall = mkEnableOption "the firewall (deny inbound except LocalSend)" // {
         default = true;
       };
+      once = mkEnableOption "ONCE and its background service (Install › Service › ONCE; needs Docker)";
+      nordvpn = mkEnableOption "the NordVPN daemon, with the user in the nordvpn group (Install › Service › NordVPN)";
     };
   };
 }

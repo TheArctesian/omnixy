@@ -1,0 +1,237 @@
+#!/bin/bash
+
+# omarchy:summary=Print the omnixy.hardware options this machine needs
+# omarchy:args=[--nix|--lines]
+#
+# The NixOS stand-in for upstream's install-time hardware probing
+# (install/hardware/*.sh and the omarchy-hw-* helpers). It reads DMI, PCI,
+# USB, ACPI and CPU data from sysfs/procfs and prints which
+# omnixy.hardware.* options to set. It never writes anything and needs no root.
+#
+# Output contract (stdout; diagnostics go to stderr):
+#
+#   --lines (default)
+#     One option per line, in the form
+#       omnixy.hardware.<path> = <nix value>; # <reason>
+#     followed by zero or more advice lines that start with "# ". No output
+#     at all means the machine needs no hardware options.
+#
+#   --nix
+#     A single Nix expression: the attrset to assign to `omnixy.hardware`.
+#       {
+#         <path> = <nix value>; # <reason>
+#         # <advice>
+#       }
+#     It is always a valid attrset, `{ }` when nothing matched. Advice lines
+#     are Nix comments (things the module cannot do for you, such as importing
+#     a nixos-hardware profile). Paths are relative to omnixy.hardware.
+#
+#   Values are Nix literals: `true`, or a double-quoted string. Each path
+#   appears at most once. Exit status is 0 whether or not anything matched,
+#   2 for a usage error.
+#
+# Environment (for tests): OMNIXY_HW_ROOT is prefixed to /sys, /proc and /etc
+# reads; when it is set, lspci, timedatectl and omarchy-audio-tuning are not
+# consulted.
+
+set -uo pipefail
+
+mode=lines
+case ${1:-} in
+"" | --lines) ;;
+--nix) mode=nix ;;
+-h | --help)
+  sed -n '3,/^$/s/^# \{0,1\}//p' "$0"
+  exit 0
+  ;;
+*)
+  echo "Usage: omnixy-hardware-detect [--nix|--lines]" >&2
+  exit 2
+  ;;
+esac
+
+root=${OMNIXY_HW_ROOT:-}
+dmi=$root/sys/class/dmi/id
+pci=$root/sys/bus/pci/devices
+
+options=()
+advice=()
+
+add() { options+=("$1 = $2; # $3"); }
+note() { advice+=("$1"); }
+
+read_file() { [[ -r $1 ]] && printf '%s' "$(<"$1")"; }
+
+sys_vendor=$(read_file "$dmi/sys_vendor")
+product_name=$(read_file "$dmi/product_name")
+product_family=$(read_file "$dmi/product_family")
+model_desc=${product_name:-unknown model}
+
+# omarchy-hw-match: case-insensitive substring of product name or family.
+hw_match() {
+  local want=${1,,}
+  [[ ${product_name,,} == *"$want"* || ${product_family,,} == *"$want"* ]]
+}
+
+# pci_has <vendor> <device regex>
+pci_has() {
+  local dev
+  for dev in "$pci"/*; do
+    [[ $(read_file "$dev/vendor") == "$1" && $(read_file "$dev/device") =~ $2 ]] && return 0
+  done
+  return 1
+}
+
+# omarchy-hw-intel-ptl: an Intel Panther Lake GPU. lspci names it; the
+# sysfs fallback matches the Xe3 display IDs (0xb08x-0xb0bx).
+intel_ptl() {
+  if [[ -z $root ]] && command -v lspci >/dev/null; then
+    lspci 2>/dev/null | grep -iE 'vga|3d|display' | grep -qi 'panther lake' && return 0
+  fi
+  local dev
+  for dev in "$pci"/*; do
+    [[ $(read_file "$dev/vendor") == 0x8086 && $(read_file "$dev/class") == 0x03* ]] || continue
+    [[ $(read_file "$dev/device") =~ ^0xb0[89ab][0-9a-f]$ ]] && return 0
+  done
+  return 1
+}
+
+# --- ASUS (asus-rog.sh, asus/*.sh) --------------------------------------------
+if [[ $sys_vendor == "ASUSTeK COMPUTER INC." && $product_family == *ROG* ]]; then
+  add asus.enable true "ASUS ROG: asusd/asusctl for keyboard lighting ($model_desc)"
+fi
+if hw_match B9406 && intel_ptl; then
+  add asus.expertbookB9406.enable true "ASUS ExpertBook B9406 on Panther Lake: panel replay and backlight fixes"
+elif hw_match ux5406aa && intel_ptl; then
+  add asus.zenbookUX5406AA.enable true "ASUS Zenbook UX5406AA on Panther Lake: backlight fix"
+fi
+
+# --- Framework (framework16.sh, framework/qmk-hid.sh) -------------------------
+if [[ $sys_vendor == Framework ]]; then
+  if hw_match "Laptop 16"; then
+    add framework.enable true "Framework Laptop 16: qmk_hid for keyboard lighting"
+  fi
+  note "Framework laptop: consider the matching nixos-hardware.nixosModules.framework-* profile."
+fi
+
+# --- NVIDIA (nvidia.sh, omarchy-hw-nvidia-gsp / -without-gsp) -----------------
+nvidia_new=0 nvidia_legacy=0 nvidia_old=0 other_gpu=0
+for dev in "$pci"/*; do
+  [[ $(read_file "$dev/class") == 0x03* ]] || continue
+  if [[ $(read_file "$dev/vendor") == 0x10de ]]; then
+    id=$(read_file "$dev/device")
+    [[ $id =~ ^0x[0-9a-fA-F]+$ ]] || continue
+    if ((id >= 0x1e00)); then
+      nvidia_new=1
+    elif ((id >= 0x1340)); then
+      nvidia_legacy=1
+    else
+      nvidia_old=1
+    fi
+  else
+    other_gpu=1
+  fi
+done
+if ((nvidia_new)); then
+  add nvidia.enable true "NVIDIA GPU with GSP firmware (Turing or newer): open kernel modules"
+elif ((nvidia_legacy)); then
+  add nvidia.enable true "NVIDIA Maxwell/Pascal/Volta GPU"
+  add nvidia.legacy true "no GSP firmware: 580 legacy branch, closed modules"
+elif ((nvidia_old)); then
+  note "NVIDIA GPU older than Maxwell: no supported proprietary driver; nouveau is used."
+fi
+if ((nvidia_new || nvidia_legacy)) && ((other_gpu)); then
+  note "Hybrid graphics: set hardware.nvidia.prime (offload + bus IDs from lspci) for PRIME offload."
+fi
+
+# --- Apple (apple/*.sh, fix-bcm43xx.sh) ---------------------------------------
+if pci_has 0x106b '^0x180[12]$'; then
+  add apple.t2.enable true "T2 Mac ($model_desc)"
+  note "T2 Mac: also import nixos-hardware.nixosModules.apple-t2 (kernel, audio, Wi-Fi firmware)."
+fi
+if [[ $product_name =~ ^(MacBook[89],1|MacBook1[02],1|MacBookPro13,[123]|MacBookPro14,[123])$ ]]; then
+  add apple.spiKeyboard.enable true "$product_name has an SPI keyboard: load it in the initrd"
+fi
+if pci_has 0x14e4 '^0x(43a0|4331)$'; then
+  add broadcom.wl.enable true "Broadcom BCM4360/BCM4331 Wi-Fi needs the wl driver"
+fi
+
+# --- Microsoft Surface (surface.sh, fix-surface-keyboard.sh) ------------------
+if [[ $sys_vendor == "Microsoft Corporation" ]] && hw_match Surface; then
+  add surface.enable true "$model_desc: keyboard drivers in the initrd"
+  note "Surface: consider nixos-hardware.nixosModules.microsoft-surface-common (linux-surface kernel)."
+fi
+
+# --- Intel (intel/fred.sh, intel/ipu7-camera.sh) ------------------------------
+if intel_ptl; then
+  add intel.pantherLake.enable true "Intel Panther Lake: enable FRED"
+fi
+ipu7_sensor=0
+for hid in "$root"/sys/bus/acpi/devices/*/hid; do
+  [[ $(read_file "$hid") == OVTI08F4 ]] && ipu7_sensor=1 && break
+done
+if ((ipu7_sensor)); then
+  if pci_has 0x8086 '^0xb05d$'; then
+    add intel.ipu7 '"ipu75xa"' "IPU7 MIPI camera (Panther Lake)"
+  elif pci_has 0x8086 '^0x645d$'; then
+    add intel.ipu7 '"ipu7x"' "IPU7 MIPI camera (Lunar Lake)"
+  else
+    note "IPU7 camera sensor found but no known IPU PCI ID; set omnixy.hardware.intel.ipu7 by hand."
+  fi
+fi
+
+# --- Dell (dell-xps-touchpad-haptics.sh) ----------------------------------------
+if hw_match XPS && [[ -e $root/sys/bus/i2c/devices/i2c-VEN_06CB:00 ]]; then
+  add dell.xpsHapticTouchpad.enable true "Dell XPS with the Synaptics haptic touchpad"
+fi
+
+# --- TUXEDO / Slimbook (fix-tuxedo-backlight.sh, fix-yt6801-ethernet-adapter.sh)
+if [[ ${sys_vendor,,} == *tuxedo* || ${sys_vendor,,} == *slimbook* ]]; then
+  add tuxedo.enable true "$sys_vendor: tuxedo-drivers for the keyboard backlight"
+fi
+if pci_has 0x1f0a '^0x6801$'; then
+  add motorcomm.yt6801.enable true "Motorcomm YT6801 Ethernet"
+fi
+
+# --- Wireless regulatory domain (set-wireless-regdom.sh) ----------------------
+timezone=""
+if [[ -z $root ]] && command -v timedatectl >/dev/null; then
+  timezone=$(timedatectl show -p Timezone --value 2>/dev/null)
+fi
+if [[ -z $timezone && -L $root/etc/localtime ]]; then
+  timezone=$(readlink "$root/etc/localtime")
+  timezone=${timezone#*/zoneinfo/}
+fi
+country=${timezone%%/*}
+if [[ ! $country =~ ^[A-Z]{2}$ && -n $timezone ]]; then
+  country=""
+  for zone_tab in "$root"/etc/zoneinfo/zone.tab "$root"/usr/share/zoneinfo/zone.tab; do
+    [[ -r $zone_tab ]] || continue
+    while IFS=$'\t' read -r code _ tz _; do
+      if [[ $tz == "$timezone" ]]; then
+        country=$code
+        break
+      fi
+    done <"$zone_tab"
+    break
+  done
+fi
+if [[ $country =~ ^[A-Z]{2}$ ]]; then
+  add wirelessRegdom "\"$country\"" "from timezone $timezone"
+fi
+
+# --- Output -------------------------------------------------------------------
+if [[ $mode == nix ]]; then
+  if ((${#options[@]} + ${#advice[@]} == 0)); then
+    echo "{ }"
+    exit 0
+  fi
+  echo "{"
+  for line in "${options[@]}"; do printf '  %s\n' "$line"; done
+  for line in "${advice[@]}"; do printf '  # %s\n' "$line"; done
+  echo "}"
+else
+  for line in "${options[@]}"; do printf 'omnixy.hardware.%s\n' "$line"; done
+  for line in "${advice[@]}"; do printf '# %s\n' "$line"; done
+fi
+exit 0

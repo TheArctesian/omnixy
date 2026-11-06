@@ -40,6 +40,26 @@ flake and can be rolled back.
 
 ## Install
 
+### From the ISO
+
+Build the live ISO (`nix build github:TheArctesian/omnixy#iso`), write it to a USB
+stick and boot it (UEFI). The desktop opens **Install OmniXY**, a guided installer
+in the style of Omarchy's (relaunch it from the app launcher, or run
+`omnixy-install`). It asks for keyboard, user name, password, full name, email,
+hostname, timezone, the disk to erase and whether to encrypt it, then:
+
+- partitions the disk with disko: a 1G EFI partition and btrfs (`@`, `@home`,
+  `@nix`, `@log`, zstd compression), optionally inside LUKS2 unlocked with your
+  password at boot (encrypted installs also log in automatically, as upstream);
+- writes `/etc/nixos` as a flake importing `github:TheArctesian/omnixy`, with your
+  answers in `configuration.nix` and the `nixos-generate-config` hardware file;
+- runs `nixos-install` (needs internet) and offers to reboot.
+
+`omnixy-install --dry-run` prints the generated files and the commands without
+touching a disk; `--help` lists the `OMNIXY_INSTALL_*` variables that preset answers.
+
+### Onto an existing NixOS
+
 On an existing NixOS install (UEFI, flakes enabled):
 
 ```bash
@@ -70,14 +90,42 @@ omnixy = {
   # preinstalls.enable = false; # skip LibreOffice, OBS, Kdenlive, Obsidian, ...
   # features = { docker = false; printing = false; plymouth = false; };
   # flake.path = "/home/alice/nixos";  # what omarchy-update rebuilds
+  # hardware.nvidia.enable = true;     # see `omnixy-hardware-detect`
 };
 ```
 
+### Hardware
+
+Upstream's hardware quirks (`install/hardware/`) that check the machine at
+runtime are always on: the Apple Wi-Fi handshake and NVMe suspend fixes,
+Apple-style F-keys, Intel BE200 Wi-Fi 7, the ASUS and Framework udev rules,
+thermald and intel-lpmd. Set `omnixy.hardware.quirks.enable = false` to turn
+them off. Quirks that need a build-time choice are options. Run
+`omnixy-hardware-detect` to see which ones this machine needs:
+
+```nix
+omnixy.hardware = {
+  asus.enable = true;          # ROG: asusd/asusctl, keyboard lighting follows the theme
+  framework.enable = true;     # Framework 16: qmk_hid keyboard lighting
+  nvidia.enable = true;        # proprietary driver, open modules (legacy = true for Maxwell-Volta)
+  apple.t2.enable = true;      # plus nixos-hardware.nixosModules.apple-t2
+  # surface, apple.spiKeyboard, broadcom.wl, intel.pantherLake, intel.ipu7,
+  # dell.xpsHapticTouchpad, tuxedo, motorcomm.yt6801, wirelessRegdom
+};
+```
+
+[docs/hardware.md](docs/hardware.md) maps every upstream hardware script to its
+OmniXY equivalent.
+
 ### Try it first
+
+Download the live ISO: **[iso.omnixy.org/latest](https://iso.omnixy.org/latest/omnixy-latest-x86_64-linux.iso)**.
+Checksums and older versions are on the [releases page](https://github.com/TheArctesian/omnixy/releases).
+It boots into the desktop as `omnixy` (password `omnixy`). Or build it yourself:
 
 ```bash
 nix run github:TheArctesian/omnixy#vm   # throwaway VM, auto-logs in as omnixy/omnixy
-nix build github:TheArctesian/omnixy#iso  # live ISO, boots straight into the desktop
+nix build github:TheArctesian/omnixy#iso  # live ISO: the desktop plus the installer
 ```
 
 ## Day to day
@@ -103,6 +151,7 @@ nix run .#vm                                      # interactive VM
 ```
 
 To move to a new Omarchy release, follow [docs/updating-upstream.md](docs/updating-upstream.md).
+To publish an ISO, see [docs/releasing.md](docs/releasing.md).
 
 ## Layout
 
@@ -110,10 +159,12 @@ To move to a new Omarchy release, follow [docs/updating-upstream.md](docs/updati
 flake.nix                  inputs (nixpkgs, omarchy@tag), outputs
 packages/omarchy/          the Omarchy package + NixOS replacement commands (bin/)
 packages/*.nix             ttfx, tensaku, fonts, sddm and plymouth themes
+packages/omnixy-install/   the ISO's guided installer
 modules/                   the NixOS module (options in default.nix)
 hosts/{example,vm,iso}/    example machine, test VM, live ISO
 templates/default/         `nix flake init -t` starter
 tests/desktop.nix          boots the desktop and screenshots it
+tests/installer.nix        shellchecks omnixy-install and checks its --dry-run output
 ```
 
 ## License

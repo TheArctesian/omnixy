@@ -70,6 +70,8 @@ in
 
     # Session-wide environment that upstream puts in uwsm's env.d.
     environment.sessionVariables = {
+      # PipeWire filter chains (omarchy-audio-tuning) look up LV2 plugins here.
+      LV2_PATH = "/run/current-system/sw/lib/lv2:/etc/profiles/per-user/${cfg.user}/lib/lv2";
       OMARCHY_PATH = pkgs.omarchy.omarchyPath;
       OMNIXY_FLAKE = cfg.flake.path;
       OMNIXY_DEFAULT_THEME = cfg.theme;

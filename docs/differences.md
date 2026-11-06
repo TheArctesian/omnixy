@@ -63,13 +63,14 @@ again.
 
 ## Not packaged for NixOS yet
 
-- **Hardware quirks** from `install/hardware/` (Apple T2, Surface, ASUS ROG,
-  Framework 16, Dell XPS, Broadcom Wi-Fi, NVIDIA). Use
-  [nixos-hardware](https://github.com/NixOS/nixos-hardware) and the usual
-  `hardware.nvidia.*` options instead.
-- **Offline ISO installer / provisioning flow:** the OmniXY ISO is a live desktop
-  with the standard NixOS installer tools (`nixos-install`, `disko`), not Omarchy's
-  guided installer.
+- **Some hardware extras.** Most of `install/hardware/` is ported. Quirks that
+  check the hardware at runtime are always on, and the rest are
+  `omnixy.hardware.*` options (`omnixy-hardware-detect` lists the ones that
+  apply). T2 fan control (t2fanrd) is not packaged, and the T2 and Surface
+  kernels come from [nixos-hardware](https://github.com/NixOS/nixos-hardware).
+  See [hardware.md](hardware.md).
+- **Offline install:** `omnixy-install`, the ISO's guided installer, needs a
+  network connection; it fetches the OmniXY flake from GitHub.
 
 ## Known gaps
 

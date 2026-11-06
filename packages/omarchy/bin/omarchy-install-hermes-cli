@@ -1,0 +1,275 @@
+#!/bin/bash
+
+# omarchy:summary=Install Hermes Desktop for the default agent; it provides the hermes command
+# omarchy:args=<--check|--now|--retire-mise>
+# omarchy:examples=omarchy install hermes cli --now | omarchy install hermes cli --check
+# omarchy:requires-sudo=true
+
+# There is one Hermes on a machine, and it is the desktop app's. On Arch,
+# hermes-desktop is a seed from which upstream's installer builds a
+# self-updating checkout under ~/.hermes; that checkout runs uv, CPython, Node
+# and Electron builds downloaded for generic Linux, none of which start on
+# NixOS. OmniXY's hermes-desktop (packages/hermes-desktop.nix) is instead
+# Hermes' own Nix build of the same release: the app and the `hermes` command
+# it runs, installed into the nix profile and updated with OmniXY. So --check
+# asks whether that package is in and its `hermes` is what omarchy-agent would
+# run, and --now installs it; there is no runtime to seed.
+#
+# The wrapper the retired installer wrote, and the mise environment it built,
+# are known here and nowhere else: --retire-mise is what the migration runs,
+# and --now runs the same removal.
+#
+# Each mode is named outright. The app's launcher used to call this with no
+# arguments to reconcile a mise copy, and a default of --now would turn every
+# launch of the app into an install.
+
+set -euo pipefail
+
+mode=${1:-}
+
+# Keep the runtime at the root even when invoked from a Hermes profile.
+HERMES_HOME=$(realpath -ms -- "${HERMES_HOME:-$HOME/.hermes}")
+home_parent=$(dirname -- "$HERMES_HOME")
+if [[ ${home_parent##*/} == [Pp][Rr][Oo][Ff][Ii][Ll][Ee][Ss] ]]; then
+  HERMES_HOME=$(dirname -- "$home_parent")
+fi
+export HERMES_HOME
+
+# Where the retired wrapper lived. The package's own command is found in the
+# nix profiles instead (package_command below).
+command_path="$HOME/.local/bin/hermes"
+
+# The wrapper the retired mise-backed installer wrote, matched whole so a
+# wrapper that merely mentions it is not mistaken for it, and the tool it
+# built. Running the wrapper built Hermes through mise, so it is never run to
+# find out whether Hermes is there.
+legacy_marker='# Written by omarchy-install-hermes-cli.'
+legacy_tool='pipx:hermes-agent[extras=all]'
+
+legacy_stub() {
+  [[ -f $command_path ]] && grep -qxF "$legacy_marker" "$command_path"
+}
+
+# Only the wrapper Omarchy wrote proves the environment is Omarchy's to remove:
+# the regular file at its path, or the copy a run of this installer saved aside
+# before upstream's installer took the name, since a user who chose Hermes
+# before the migration ran has it there and the environment still requested.
+# A link is someone else's arrangement, even when it lands on the wrapper, and
+# so is a linked backup directory: the installer makes real ones.
+saved_wrapper() {
+  [[ ! -L ${1%/hermes} && -f $1 && ! -L $1 ]] && grep -qxF "$legacy_marker" "$1"
+}
+
+legacy_owned() {
+  local saved
+  if legacy_stub && [[ ! -L $command_path ]]; then
+    return 0
+  fi
+  for saved in "$HOME/.local/bin"/.hermes-before-desktop.*/hermes; do
+    if saved_wrapper "$saved"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Gone means neither installed nor still asked for in the global config, where
+# `mise up` would build it again. `mise rm -g` exits 0 whether or not it removed
+# anything, so the listing is read instead, and a listing that cannot be read
+# -- mise broken, or not there to read it -- is not an answer. The key carries
+# the backend and name, with or without the options.
+mise_retired() {
+  local requested
+  requested=$(mise ls -g --json 2>/dev/null) || return 1
+  ! mise where "$legacy_tool" >/dev/null 2>&1 && ! grep -qE '"pipx:hermes-agent(\[|")' <<<"$requested"
+}
+
+# Removes the environment the retired wrapper built, judged by what is left
+# rather than by what the commands claimed. Only for a caller that has proved
+# it Omarchy's.
+retire_mise() {
+  if mise_retired; then
+    return 0
+  fi
+  mise rm -g "$legacy_tool" >/dev/null 2>&1 || true
+  mise uninstall --all "$legacy_tool" >/dev/null 2>&1 || true
+  if mise_retired; then
+    return 0
+  fi
+  echo "Could not remove the Hermes that mise built. Finish by hand:" >&2
+  if omarchy-cmd-missing mise; then
+    echo "  omarchy pkg add mise" >&2
+  fi
+  echo "  mise rm -g '$legacy_tool'" >&2
+  echo "  mise uninstall --all '$legacy_tool'" >&2
+  return 1
+}
+
+# Once the environment is gone the proof has done its work. Left behind it
+# would keep --check answering no for an install that is finished, and claim
+# an environment the user builds later as Omarchy's. The copies are Omarchy's
+# own wrapper, so removing them takes nothing of the user's; a backup directory
+# that held nothing else goes with them.
+forget_legacy() {
+  local saved
+  if legacy_stub && [[ ! -L $command_path ]]; then
+    rm -f "$command_path"
+  fi
+  for saved in "$HOME/.local/bin"/.hermes-before-desktop.*/hermes; do
+    if saved_wrapper "$saved"; then
+      rm -f "$saved"
+      rmdir "${saved%/hermes}" 2>/dev/null || true
+    fi
+  done
+}
+
+# The package's `hermes`, by the profile path it is installed under: the nix
+# profile omarchy-pkg-add installs into, the declarative per-user profile, or
+# the system profile.
+package_command() {
+  local dir
+  for dir in "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profile" "$HOME/.nix-profile" \
+    "/etc/profiles/per-user/$USER" /run/current-system/sw; do
+    if [[ -f $dir/share/applications/hermes-desktop.desktop && -x $dir/bin/hermes ]]; then
+      echo "$dir/bin/hermes"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# A hermes is usable when it is a command that runs: --version answers. The
+# desktop app applies the same probe with the same 15 second budget.
+hermes_runs() {
+  local command
+  command=$(package_command) || return 1
+  timeout 15 "$command" --version >/dev/null 2>&1
+}
+
+# A flag counts only when the help defines it, not whenever it is mentioned:
+# closing its short form, followed by its metavar, or padded to a description
+# column. Matched against the help text rather than by parsing an actual
+# invocation on purpose: a release that ignores unknown arguments would turn
+# the probe into a live session.
+help_defines_flag() {
+  grep -qE -- "$1(]|[[:space:]][[:upper:]]|[[:space:]]{2}|$)" <<<"$2"
+}
+
+# Probed for the flags omarchy-agent actually passes -- --query to seed the
+# session and --tui to keep it interactive -- rather than a marker standing in
+# for them.
+hermes_prompt_ready() {
+  local help command
+  command=$(package_command) || return 1
+  hermes_runs &&
+    help=$(timeout 15 "$command" chat --help 2>/dev/null) &&
+    help_defines_flag '--tui' "$help" &&
+    help_defines_flag '--query' "$help"
+}
+
+# What omarchy-agent runs is whichever hermes is first on PATH, and Omarchy puts
+# mise's shims and ~/.local/bin ahead of the nix profile. So the hermes PATH
+# finds has to be the package's. A PATH that finds none is not in the way: the
+# theme unit asks from a service whose PATH may lack the profile, and runs the
+# package's command by its path.
+on_path() {
+  local found command
+  found=$(type -P hermes) || return 0
+  command=$(package_command) || return 1
+  [[ $(realpath -m -- "$found") == "$(realpath -m -- "$command")" ]]
+}
+
+shadowing_hermes() {
+  type -P hermes || true
+}
+
+# What --check answers, and what --now has nothing left to do about: the
+# package is in, its command runs the seeded sessions omarchy-agent needs and
+# is the one PATH finds, and nothing of the retired wrapper is left to remove.
+# Choosing Hermes from the menu asks first and opens a terminal only on a no.
+installed() {
+  on_path || return 1
+  if legacy_owned; then
+    return 1
+  fi
+  omarchy-pkg-present hermes-desktop && hermes_prompt_ready
+}
+
+# Once the package's Hermes answers, the environment the retired wrapper built
+# goes with whatever proof is left of it, and then PATH has to agree: a mise
+# shim, a ~/.local/bin/hermes, or anything else ahead of the profile is what
+# the default agent would run instead.
+settle_path() {
+  if legacy_owned; then
+    echo "Removing the Hermes that mise built; Hermes now comes from the nix profile..."
+    retire_mise || return 1
+    forget_legacy
+    hash -r
+  fi
+  if ! on_path; then
+    echo "$(package_command) is ready, but 'hermes' on PATH is $(shadowing_hermes), which is what the default agent runs." >&2
+    echo "Remove or reorder it, then run omarchy-install-hermes-cli --now again." >&2
+    return 1
+  fi
+}
+
+case "$mode" in
+--check)
+  if installed; then exit 0; else exit 1; fi
+  ;;
+--retire-mise)
+  # The migration's whole job. The environment goes before the wrapper, since
+  # once the wrapper is gone nothing marks the environment as Omarchy's and a
+  # rerun could not finish what a failed removal left behind.
+  if legacy_owned; then
+    retire_mise || exit 1
+    forget_legacy
+  fi
+  exit 0
+  ;;
+--now) ;;
+*)
+  echo "Usage: omarchy-install-hermes-cli <--check|--now|--retire-mise>" >&2
+  exit 1
+  ;;
+esac
+
+if (( EUID == 0 )); then
+  echo "Run this command as your desktop user, without sudo." >&2
+  exit 1
+fi
+
+if installed; then
+  exit 0
+fi
+
+# Whether this run gave Hermes something new to show the theme to.
+set_up=false
+if ! omarchy-pkg-present hermes-desktop; then
+  echo "Installing Hermes Desktop..."
+  omarchy-pkg-add hermes-desktop || exit 1
+  hash -r
+  set_up=true
+fi
+
+if ! package_command >/dev/null; then
+  echo "The hermes-desktop package is installed, but no nix profile provides its hermes command." >&2
+  exit 1
+fi
+
+# What omarchy-agent runs is the command, so the command is what has to answer
+# for the seeded sessions.
+if ! hermes_prompt_ready; then
+  echo "Hermes is installed, but $(package_command) does not run the interactive seeded sessions Omarchy needs." >&2
+  exit 1
+fi
+
+settle_path || exit 1
+
+# Only a running Hermes can be told which skin to show; a unit outlives this
+# terminal and reports to the journal.
+if [[ $set_up == "true" ]]; then
+  echo "Matching Hermes to the current theme once it is set up..."
+  systemctl --user stop omarchy-hermes-theme.service 2>/dev/null || true
+  systemd-run --user --quiet --collect --unit=omarchy-hermes-theme omarchy-theme-set-hermes --wait || true
+fi

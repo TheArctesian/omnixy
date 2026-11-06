@@ -1,6 +1,6 @@
 # Gap analysis: Omarchy v4.0.6 vs OmniXY
 
-This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) with [omnixy-spec.md](omnixy-spec.md) (`ONX-*`, OmniXY as audited before this change). Both specs are in ASD-STE100 Simplified Technical English and use the same 16-section outline. `ONX-*` statuses describe the tree *before* the fixes below. Re-audit after merging.
+This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) with [omnixy-spec.md](omnixy-spec.md) (`ONX-*`, OmniXY as re-audited after PRs #3 and #4). Both specs are in ASD-STE100 Simplified Technical English and use the same 16-section outline. `ONX-*` statuses were re-audited on 2026-11-04, after PRs #3 and #4. They describe the tree *after* the fixes below. PR #5 then fixed every row that was still `BROKEN` (see the second table).
 
 ## Fixed in this change
 
@@ -36,19 +36,37 @@ This compares [omarchy-spec.md](omarchy-spec.md) (`OMA-*`, upstream behaviour) w
 | Reset Computer calls the factory-reset stub (ONX-11-082) | Menu entry removed |
 | Sunshine firewall (ONX-11-020) | Printed option includes `openFirewall`; the script already skips ufw when it is absent |
 | Omarchy's own apps: omacalc, omacut, omawrite, aether, omazed, omarchy-nvim (ONX-5-014/015, ONX-9-015/021, ONX-12-007/008) | Built from source in `packages/` (follow-up change). `omnixy-pkg` installs them from the registered `omnixy` flake. omarchy-nvim is seeded on login without the prebuilt plugin cache. |
-| Dead `faillock.conf` with no `pam_faillock` (ONX-15-004) | Removed (see open gaps) |
+| Root halves of `omarchy-dns`, `omarchy-theme-set-browser-policy`, `omarchy-windows-vm` pin `PATH` to empty FHS dirs (ONX-11-127, ONX-10-005, ONX-11-047, ONX-11-124; found by the re-audit) | `PATH` is the system profile. The VM test runs `sudo -n omarchy-dns DHCP` for real. |
+| `omarchy-audio-tuning` needs lsp-plugins at `/usr/lib/lv2` (ONX-11-102, ONX-4-018) | The LV2 bundle (without its UI library) is in the base packages; path rewritten; `LV2_PATH` set for the session |
+| `omarchy-debug` / `omarchy-upload-log` package section uses pacman (ONX-11-095/096) | `omnixy-pkg list` (system and profile packages) |
+| Omarchy user units get NixOS's minimal `PATH`, so the sleep lock fails (`dbus-monitor: not found`) | System and per-user profiles on their `path` |
+| Dead `faillock.conf` with no `pam_faillock` (ONX-15-004) | Removed, then replaced by real `pam_faillock` rules (PR #5, below) |
+
+## Fixed in PR #5
+
+| Gap (spec IDs) | Fix |
+| --- | --- |
+| Guided installer (ONX-4-009) | `omnixy-install`: gum TUI, disko (ESP + btrfs, optional LUKS2), generated flake with detected `omnixy.hardware`, `nixos-install`; autostarts on the ISO. Plain and LUKS installs tested end-to-end in QEMU. Also fixed: SDDM login on a fresh install (no last user), live session locking mid-install |
+| `pam_faillock` (ONX-15-004) | `deny=10 unlock_time=120` rules around `pam_unix` in login, sudo, su, polkit-1, sshd and the lock screen; VM-tested |
+| tobi-try, asdcontrol (ONX-5-016) | Packaged and in the base set; upstream's asdcontrol sudoers grant |
+| NordVPN, ONCE (ONX-11-021/022) | `omnixy.features.nordvpn`, `omnixy.features.once` |
+| ChatGPT/Codex, T3 Code (ONX-11-023/024) | nixpkgs `chatgpt`, `t3code` |
+| Perplexity, Grok Bot, Zen, OpenClaw, Hermes (ONX-11-025) | Built from upstream's packages (OpenClaw as its self-updating seed); Hermes from the hermes-agent flake |
+| omarchy-emacs (ONX-11-014) | Packaged; `emacs.service` linked from the profile |
+| Lutris (ONX-11-018) | Exported from the OmniXY flake with gtk2's deprecation flag set to warn; shebang rewrite dropped; lib32 drivers map to `hardware.graphics.enable32Bit` |
+| voxtype unit (ONX-9-035, ONX-11-119) | The generated unit runs the profile's `voxtype`, not a store path |
+| Firefox / Zen policies | Written to `/etc/<app>/policies`, which nixpkgs' builds read |
+| `omarchy-setup-direct-boot` (ONX-11-110) | Prints `boot.loader.timeout = 0;` (no UKI on NixOS; the menu stays available for rollback) |
+| Hardware quirks, ASUS/Framework keyboard lights (ONX-4-029, ONX-14-003/006/008, ONX-10-007) | `modules/hardware.nix`, `omnixy-hardware-detect`; see [../hardware.md](../hardware.md) |
 
 ## Open gaps
 
 | Gap | Why it is still open |
 | --- | --- |
-| tobi-try, asdcontrol, voxtype install path, NordVPN, ONCE, ChatGPT/Codex desktop, T3 Code, Hermes, OpenClaw, Perplexity, Grok, Zen, omarchy-emacs (ONX-5-016, ONX-11-021…025, ONX-9-035) | Not in nixpkgs. They report "Not packaged for NixOS". |
-| Lutris | nixpkgs marks a dependency (gtk2) insecure. Installing needs `nixpkgs.config.permittedInsecurePackages`. The `sudo sed /usr/bin/lutris` step still fails. |
-| `pam_faillock` (OMA-6-048, OMA-8-056) | NixOS has no faillock option. Wiring it through `security.pam.services.*.rules` affects every login path and needs real-hardware testing first. NixOS has *no* lockout by default, so this is a hardening gap, not a usability one. |
-| Hardware quirks (`install/hardware/*`, ONX-14-003), `asusctl`, `qmk_hid` keyboard lights (ONX-10-007, ONX-11-049) | Machine-specific. Use nixos-hardware and `services.asusd`. They are not on by default. |
+| Hardware quirks are untested on the real machines | Each quirk checks the hardware or is an option; evals pass, but nobody has run them on an ASUS, Framework, Mac or Surface yet. linux-t2 / linux-surface kernels come from nixos-hardware; t2fanrd is not packaged. |
 | `omarchy-install-dev-env` PHP edits `/etc/php`; prebuilt mise runtimes need nix-ld (ONX-11-030) | Needs a design decision: enabling `programs.nix-ld` system-wide changes what binaries run. |
-| `omarchy-debug` / `omarchy-upload-log` package section uses pacman (ONX-11-095/096) | It degrades to "unknown"; cosmetic. |
-| GeForce NOW (flatpak), Steam, Tailscale, sshd, fprintd, FIDO2 | Option-backed by design: the command prints the option and stops. |
+| GeForce NOW (flatpak), Steam, Tailscale, sshd, fprintd, FIDO2, NordVPN, ONCE | Option-backed by design: the command prints the option and stops. |
 | `omarchy-update-available` often reports updates (ONX-8-010) | nixos-unstable moves daily. A stable channel or a less frequent check would fix it. |
 | SDDM runs on Weston, not Hyprland (ONX-10-011) | NixOS' SDDM Wayland mode. The visual result is the same theme. |
-| Guided installer (ONX-4-009) | The ISO is a live desktop with `nixos-install`/disko. |
+| `etc/profile.d/omarchy.sh` (ONX-6-033) | Not mirrored. It sources `env-bootstrap`, which the OmniXY session already does. Check that login shells outside the session do not need it. |
+| Hermes and OpenClaw onboarding | Need API keys; the install and remove paths were tested in a scratch home only. Hermes updates with the flake input, not `hermes update`. |

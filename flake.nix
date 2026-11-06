@@ -11,6 +11,10 @@
       url = "github:basecamp/omarchy/v4.0.6";
       flake = false;
     };
+
+    # Hermes Desktop (Install › AI › Hermes): its own Nix build. Not following
+    # our nixpkgs: its desktop build pins Electron headers for its own pin.
+    hermes-agent.url = "github:NousResearch/hermes-agent/v2026.9.7";
   };
 
   outputs =
@@ -18,6 +22,7 @@
       self,
       nixpkgs,
       omarchy,
+      hermes-agent,
     }:
     let
       system = "x86_64-linux";
@@ -27,6 +32,17 @@
         inherit system;
         config.allowUnfree = true;
         overlays = [ self.overlays.default ];
+      };
+
+      # Opt-in installs that nixpkgs gates behind a config flag, built here so
+      # `omnixy-pkg` can install them from the menu like upstream does:
+      # Lutris' FHS env still pulls gtk2 (marked broken as deprecated).
+      pkgsOptIn = import nixpkgs {
+        inherit system;
+        config = {
+          allowUnfree = true;
+          problems.handlers."gtk+".broken = "warn";
+        };
       };
 
       mkSystem =
@@ -63,7 +79,11 @@
         vm = mkSystem [ ./hosts/vm/configuration.nix ];
 
         # Live/installer ISO: `nix build .#iso`
-        iso = mkSystem [ ./hosts/iso/configuration.nix ];
+        # The rev lets omnixy-install pin installs to the ISO's own source.
+        iso = mkSystem [
+          ./hosts/iso/configuration.nix
+          { system.configurationRevision = self.rev or null; }
+        ];
       };
 
       packages.${system} = {
@@ -75,10 +95,25 @@
           aether
           omazed
           omarchy-nvim
+          omarchy-emacs
+          tobi-try
+          asdcontrol
+          omnixy-install
           omacalc
           omawrite
           omacut
+          grok-bot
+          once
+          perplexity
+          zen-browser
           ;
+        inherit (pkgsOptIn) lutris;
+        # Omarchy's openclaw package is the seed of a self-updating install in
+        # ~/.openclaw, not nixpkgs' (store-bound) OpenClaw.
+        openclaw = pkgs.callPackage ./packages/openclaw-seed.nix { };
+        hermes-desktop = pkgs.callPackage ./packages/hermes-desktop.nix {
+          hermesAgentPackages = hermes-agent.packages.${system};
+        };
         iso = self.nixosConfigurations.iso.config.system.build.isoImage;
         vm = self.nixosConfigurations.vm.config.system.build.vm;
         default = pkgs.omarchy;
@@ -92,6 +127,7 @@
       checks.${system} = {
         example = self.nixosConfigurations.example.config.system.build.toplevel;
         desktop = import ./tests/desktop.nix { inherit pkgs self; };
+        installer = import ./tests/installer.nix { inherit pkgs; };
       };
 
       templates.default = {
