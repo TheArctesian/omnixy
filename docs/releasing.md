@@ -11,7 +11,7 @@ The workflow:
 
 The bucket is served at `https://iso.omnixy.org` (an R2 custom domain on the `omnixy.org` zone).
 
-To rebuild an existing version, run the workflow by hand (Actions › Release › Run workflow) with its tag, for example `v0.0.5`. If several PRs are merged while a build is running, the next run releases the newest commit under the newest count. Version numbers can skip, because one release can cover several PRs.
+To rebuild a version, or retry one whose upload failed, run the workflow by hand (Actions › Release › Run workflow) with its tag, for example `v0.0.5`. An existing tag is rebuilt from that tag; a version that was never tagged is built from the branch you pick. If several PRs are merged while a build is running, the next run releases the newest commit under the newest count. Version numbers can skip, because one release can cover several PRs.
 
 ## One-time setup
 

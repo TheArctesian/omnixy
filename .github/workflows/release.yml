@@ -6,7 +6,7 @@
 # v<N/10000>.<N/100 % 100>.<N % 100> (PR 4 is v0.0.4, PR 100 v0.1.0,
 # PR 3,222,222 v322.22.22), so each merged PR is one release. A push that merges no PR (the count is unchanged, the tag
 # already exists) is skipped. Run it by hand (workflow_dispatch) to rebuild
-# and re-upload an existing version.
+# and re-upload a version, or to retry one whose upload failed.
 #
 # GitHub release assets max out at 2 GiB and the ISO is ~4.5 GB, so the ISO
 # lives in R2 and the release carries the checksum and the links.
@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag to rebuild and re-publish (e.g. v0.0.5)
+        description: Version to (re)build and publish, e.g. v0.0.5. An existing tag is rebuilt from that tag; a new one is built from the selected branch.
         required: true
 
 permissions:
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Version
@@ -57,6 +57,9 @@ jobs:
         run: |
           if [[ -n "${{ github.event.inputs.tag }}" ]]; then
             tag="${{ github.event.inputs.tag }}"
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              git checkout -q "$tag"
+            fi
           else
             merged=$(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --base master \
               --limit 10000 --json number --jq length)
@@ -120,8 +123,10 @@ jobs:
           s3 cp out/SHA256SUMS "s3://$BUCKET/releases/$tag/SHA256SUMS" --content-type text/plain
 
           # Stable "latest" names; a server-side copy, no second upload.
+          # --copy-props none: aws-cli's multipart copy otherwise calls
+          # GetObjectTagging, which R2 does not implement.
           s3 cp "s3://$BUCKET/releases/$tag/$name" "s3://$BUCKET/latest/omnixy-latest-x86_64-linux.iso" \
-            --content-type application/x-iso9660-image \
+            --copy-props none --content-type application/x-iso9660-image \
             --content-disposition "attachment; filename=\"$name\""
           sed "s/$name/omnixy-latest-x86_64-linux.iso/" out/SHA256SUMS >out/SHA256SUMS.latest
           s3 cp out/SHA256SUMS.latest "s3://$BUCKET/latest/SHA256SUMS" --content-type text/plain
