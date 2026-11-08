@@ -34,7 +34,6 @@ concurrency:
 env:
   BUCKET: omnixy-iso
   PUBLIC_URL: https://iso.omnixy.org
-  KEEP_RELEASES: 3
   # R2 rejects some of aws-cli's newer default integrity checksums.
   AWS_REQUEST_CHECKSUM_CALCULATION: when_required
   AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
@@ -133,10 +132,12 @@ jobs:
           echo "$tag" >out/version.txt
           s3 cp out/version.txt "s3://$BUCKET/latest/version.txt" --content-type text/plain
 
-          # Keep the newest $KEEP_RELEASES releases.
+          # Only the release just published is kept: every other version's
+          # ISO (older releases, failed runs) is deleted.
           s3 ls "s3://$BUCKET/releases/" | awk '/PRE/ {sub("/$", "", $2); print $2}' |
-            sort -V | head -n -"$KEEP_RELEASES" | while read -r old; do
-              echo "Pruning $old"
+            while read -r old; do
+              [[ $old == "$tag" ]] && continue
+              echo "Deleting $old"
               s3 rm --recursive "s3://$BUCKET/releases/$old/"
             done
 
@@ -159,7 +160,8 @@ jobs:
           | Always the newest release | [$PUBLIC_URL/latest/omnixy-latest-x86_64-linux.iso]($PUBLIC_URL/latest/omnixy-latest-x86_64-linux.iso) |
 
           The ISO is hosted on Cloudflare R2 because it is larger than GitHub's
-          2 GiB asset limit. \`SHA256SUMS\` is attached here so you can check the
+          2 GiB asset limit. Only the newest release's ISO is kept, so this
+          version's link stops working once the next release is out. \`SHA256SUMS\` is attached here so you can check the
           download against GitHub:
 
           \`\`\`bash

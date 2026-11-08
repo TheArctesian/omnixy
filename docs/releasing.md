@@ -6,7 +6,7 @@ The workflow:
 
 1. Builds `.#iso` on a GitHub runner, after freeing disk space. This takes about 1 to 2 hours.
 2. Uploads the ISO and `SHA256SUMS` to the `omnixy-iso` R2 bucket under `releases/<version>/`. It then copies them to `latest/`, which has a stable URL.
-3. Deletes all but the newest 3 releases from the bucket.
+3. Deletes every other version's ISO from the bucket, so only the newest release is kept. Older GitHub releases stay, but their ISO links stop working.
 4. Tags the commit and creates the GitHub release. The release links to the ISO and has `SHA256SUMS` attached. The ISO itself is not attached: it is about 4.5 GB, and GitHub limits assets to 2 GiB. The tag is created last, so a failed build does not use up a version: the next push to `master` retries it.
 
 The bucket is served at `https://iso.omnixy.org` (an R2 custom domain on the `omnixy.org` zone).
